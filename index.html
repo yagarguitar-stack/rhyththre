@@ -1,0 +1,2755 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>リズトレ — 音価トレーナー</title>
+<style>
+  :root{
+    /* ==== ことり二羽・こども基調（あたたかクリーム × サザナミ緑） ==== */
+    --paper:#fdf6ea;        /* 背景クリーム */
+    --paper2:#fbeed6;       /* ヘッダ地・帯 */
+    --card:#ffffff;
+    --ink:#3a2f26;          /* 文字・音符（やわらか黒茶） */
+    --stave:#6b5d50;        /* 五線・準主役 */
+    --muted:#8b7c64;        /* ラベル・補助（クリーム地で読めるよう一段濃く） */
+    --line:#ecdcc2;         /* 枠線 */
+    --line2:#f3e7d1;        /* 薄い区切り */
+    --accent:#F3A63B;       /* アンバー・拍のアクセント */
+    --accent-deep:#C9781A;  /* 濃アンバー（選択文字） */
+    --accent-soft:#fff4e0;  /* 薄アンバー背景 */
+    --good:#3AAE6E;         /* サザナミ緑 */
+    --good-soft:#e4f6ec;
+    --bad:#E4726B;          /* やわらか赤 */
+    --bad-soft:#fce7e5;
+    --bar-fill:#4C93C8;     /* 音価バー・そらいろ */
+    --gold:#D68A2E;         /* 連続表示 */
+    --sky:#8FC7E8;          /* 白ことり系アクセント */
+    --sky-soft:#e7f4fb;
+    --star:#F6C445;         /* 星 */
+    --shadow:0 2px 6px rgba(120,80,20,.06),0 8px 22px rgba(120,80,20,.07);
+    --radius:18px;
+    --sans:'Helvetica Neue',system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    --serif:var(--sans);
+    --round:'Hiragino Maru Gothic ProN','Yu Gothic',var(--sans); /* こども向け丸ゴシック志向 */
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--sans);
+    background:var(--paper);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+    padding:0 0 40px;
+  }
+  .wrap{max-width:420px;margin:0 auto;padding:0 14px;}
+
+  /* ---- header（小鳥枠＋タイトル） ---- */
+  header{padding:16px 0 4px;text-align:center;}
+  h1{
+    font-family:var(--sans);font-weight:700;font-size:1.25rem;margin:0;
+    color:var(--accent);letter-spacing:.18em;
+  }
+  .sub{color:var(--muted);font-size:12px;margin:5px 0 0;letter-spacing:.06em;}
+  /* ==== ことり二羽ステージ ==== */
+  .birdstage{
+    width:min(390px,94vw);margin:10px auto 2px;position:relative;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  .birds{display:flex;justify-content:center;align-items:flex-end;gap:10px;}
+  .bird{width:88px;height:auto;transform-origin:50% 100%;transition:transform .2s;}
+  .bird .eye{transition:transform .12s;}
+  /* 先生イラスト（1枚仕様・角丸フレーム） */
+  #birdGreen.sensei{width:min(376px,92vw);height:250px;object-fit:fill;border-radius:18px;border:3px solid var(--good);box-shadow:0 5px 16px rgba(0,0,0,.15);}
+  /* 待機：ふわふわ上下（二羽で位相をずらす） */
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  #birdGreen{animation:bob 2.6s ease-in-out infinite;}
+  #birdWhite{animation:bob 2.6s ease-in-out infinite .9s;}
+  /* 正解：ぴょんと跳ねる */
+  @keyframes hop{0%{transform:translateY(0) scale(1)}30%{transform:translateY(-16px) scale(1.06)}55%{transform:translateY(0) scale(.97)}75%{transform:translateY(-6px)}100%{transform:translateY(0) scale(1)}}
+  .bird.happy{animation:hop .6s ease;}
+  /* 不正解：しょんぼり傾く */
+  @keyframes tilt{0%{transform:rotate(0)}30%{transform:rotate(-7deg) translateY(2px)}70%{transform:rotate(5deg) translateY(2px)}100%{transform:rotate(0)}}
+  .bird.oops{animation:tilt .55s ease;}
+  /* 吹き出し */
+  .bubble{
+    position:relative;background:#fff;border:2px solid var(--accent);
+    color:var(--ink);font-weight:700;font-size:14px;border-radius:16px;
+    padding:9px 15px;margin-bottom:8px;box-shadow:var(--shadow);
+    max-width:270px;text-align:center;line-height:1.35;transition:.15s;
+  }
+  .bubble::after{content:"";position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);
+    width:0;height:0;border:8px solid transparent;border-top-color:var(--accent);}
+  .bubble::before{content:"";position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);
+    width:0;height:0;border:7px solid transparent;border-top-color:#fff;z-index:1;}
+  .bubble.ok{border-color:var(--good);}
+  .bubble.ok::after{border-top-color:var(--good);}
+  .bubble.ng{border-color:var(--bad);}
+  .bubble.ng::after{border-top-color:var(--bad);}
+  @keyframes pop{0%{transform:scale(.8);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+  .bubble.pop{animation:pop .32s ease;}
+
+  /* ---- tabs（4列×2段グリッド・ピル選択式） ---- */
+  nav.modes{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+    margin:14px 0 6px;
+  }
+  nav.modes button{
+    font-family:var(--round);font-size:.72rem;font-weight:600;
+    border:1px solid var(--line);background:var(--card);color:var(--muted);
+    border-radius:12px;padding:8px 3px 7px;cursor:pointer;line-height:1.15;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    min-height:56px;transition:transform .12s,background .14s,border-color .14s,color .14s,box-shadow .14s;
+  }
+  nav.modes button .ico{
+    font-size:1.15rem;line-height:1;filter:grayscale(.2);opacity:.8;transition:.14s;
+  }
+  nav.modes button .lbl{font-size:.7rem;white-space:nowrap;letter-spacing:0;}
+  nav.modes button:active{transform:translateY(1px);}
+  nav.modes button[aria-selected="true"]{
+    color:var(--accent-deep);background:var(--accent-soft);
+    border-color:var(--accent);font-weight:700;
+    box-shadow:0 2px 7px rgba(201,120,26,.15);
+  }
+  nav.modes button[aria-selected="true"] .ico{filter:none;opacity:1;transform:scale(1.1);}
+
+  /* ---- card ---- */
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:18px 16px;margin-top:10px;
+  }
+  .prompt{font-size:14px;color:var(--stave);margin:0 0 14px;min-height:1.4em;}
+  .prompt b{color:var(--ink);}
+
+  /* ---- score / hud ---- */
+  .hud{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin:14px 0 0;flex-wrap:wrap;
+  }
+  .stat{display:flex;gap:14px;font-size:13px;color:var(--muted);}
+  .stat b{font-family:var(--sans);color:var(--accent);font-size:17px;font-weight:700;}
+  .streak{color:var(--gold);}
+
+  /* ---- staff area ---- */
+  .stage{
+    background:#fafaf7;
+    border:1px solid var(--line);border-radius:10px;
+    padding:14px 8px;display:flex;justify-content:center;overflow-x:auto;
+  }
+  .stage svg{display:block;}
+  /* 再生中に鳴っている音符のハイライト */
+  .snote.hl ellipse,.snote.hl line,.snote.hl path,.snote.hl rect,.snote.hl circle{fill:var(--accent)!important;stroke:var(--accent)!important;}
+
+  /* ---- choices ---- */
+  .choices{display:grid;gap:8px;margin-top:16px;}
+  .choices.cols2{grid-template-columns:1fr 1fr;}
+  .choices.cols3{grid-template-columns:1fr 1fr 1fr;}
+  .opt{
+    font-family:var(--sans);font-size:14px;font-weight:600;
+    border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:11px;padding:12px 10px;cursor:pointer;display:flex;
+    align-items:center;justify-content:center;gap:8px;min-height:48px;
+    transition:.12s;text-align:center;
+  }
+  .opt .num{
+    font-family:var(--sans);font-weight:700;color:var(--accent-deep);
+    border:1px solid var(--accent);background:var(--accent-soft);
+    border-radius:6px;min-width:22px;height:22px;display:inline-flex;
+    align-items:center;justify-content:center;font-size:13px;flex:none;
+  }
+  .opt:active{transform:translateY(1px);}
+  .opt.correct{background:var(--good-soft);border-color:var(--good);color:var(--good);}
+  .opt.correct .num{background:var(--good);border-color:var(--good);color:#fff;}
+  .opt.wrong{background:var(--bad-soft);border-color:var(--bad);color:var(--bad);}
+  .opt.wrong .num{background:var(--bad);border-color:var(--bad);color:#fff;}
+  .opt.dim{opacity:.4;}
+  .opt svg{flex:none;}
+
+  /* duration bar */
+  .durbar{height:14px;border-radius:4px;background:var(--bar-fill);opacity:.85;}
+
+  /* ---- palette (listen mode) ---- */
+  .palette{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px;}
+  .palette .opt{min-height:44px;padding:8px 10px;}
+  .tray{
+    min-height:70px;border:1.5px dashed var(--line);border-radius:12px;margin-top:12px;
+    display:flex;align-items:center;gap:4px;padding:8px 10px;flex-wrap:wrap;
+    background:#fafaf7;
+  }
+  .tray .chip{
+    display:inline-flex;align-items:center;background:var(--card);border:1px solid var(--line);
+    border-radius:8px;padding:4px;cursor:pointer;
+  }
+  .tray .chip:active{background:var(--bad-soft);}
+  .tray .empty{color:var(--muted);font-size:13px;margin:auto;}
+  .tray .traystaff{flex:1 1 100%;text-align:center;cursor:pointer;}
+  .tray .traystaff svg{max-width:100%;height:auto;vertical-align:middle;}
+  .tray .traytip{flex:1 1 100%;text-align:center;color:var(--muted);font-size:11px;margin-top:2px;}
+  .fillmeter{height:8px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:10px;}
+  .fillmeter>i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s;}
+
+  /* ---- buttons ---- */
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .btn{
+    font-family:var(--sans);font-size:14px;font-weight:700;border-radius:10px;
+    padding:12px 16px;cursor:pointer;border:1px solid var(--accent);
+    background:var(--accent);color:#1a1a1a;transition:.12s;letter-spacing:.04em;
+  }
+  .btn.ghost{background:var(--card);color:var(--stave);border-color:var(--line);font-weight:600;}
+  .btn.accent{background:var(--accent);border-color:var(--accent);color:#1a1a1a;}
+  .btn:active{transform:translateY(1px);}
+  .btn:disabled{opacity:.4;cursor:default;}
+  .btn.wide{flex:1;}
+
+  /* feedback banner */
+  .fb{
+    margin-top:14px;border-radius:11px;padding:11px 14px;font-size:14px;
+    display:none;align-items:center;gap:8px;font-weight:600;
+  }
+  .fb.show{display:flex;}
+  .fb.ok{background:var(--good-soft);color:var(--good);}
+  .fb.ng{background:var(--bad-soft);color:var(--bad);}
+  .fb .exp{font-weight:500;color:var(--stave);font-size:13px;}
+
+  /* difficulty seg */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card);}
+  .seg button{
+    border:0;background:transparent;font-family:var(--sans);font-size:12px;font-weight:600;
+    color:var(--muted);padding:8px 13px;cursor:pointer;transition:.12s;
+  }
+  .seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-deep);font-weight:700;}
+
+  .toollabel{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.03em;}
+  .hidden{display:none!important;}
+
+  /* ---- 祝福オーバーレイ（正解演出） ---- */
+  #stageCard{position:relative;}
+  .celebrate{
+    position:absolute;inset:0;z-index:30;pointer-events:none;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:16px;
+  }
+  .celebrate .flash{
+    position:absolute;inset:0;border-radius:16px;opacity:0;
+    animation:celFlash .9s ease-out forwards;
+  }
+  .celebrate.ok .flash{background:radial-gradient(circle at center,var(--good-soft),transparent 70%);}
+  .celebrate.ng .flash{background:radial-gradient(circle at center,var(--bad-soft),transparent 72%);}
+  @keyframes celFlash{0%{opacity:0;}18%{opacity:.9;}100%{opacity:0;}}
+  /* 中央の合図（イラスト or 記号） */
+  .celebrate .hero{
+    position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:6px;
+    transform:scale(.4);opacity:0;animation:celPop .55s cubic-bezier(.2,1.5,.4,1) forwards;
+  }
+  @keyframes celPop{0%{transform:scale(.4);opacity:0;}60%{transform:scale(1.12);opacity:1;}100%{transform:scale(1);opacity:1;}}
+  .celebrate .hero.fade{animation:celFade .5s ease-in forwards;}
+  @keyframes celFade{to{opacity:0;transform:scale(.9) translateY(-6px);}}
+  /* 正解イラストのプレースホルダー（後日ここに画像を差し込む） */
+  .celebrate .heroArt{
+    width:120px;height:120px;border-radius:18px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--good-soft),#fff);border:2px dashed var(--good);
+    font-size:52px;line-height:1;box-shadow:0 8px 24px rgba(47,125,91,.22);overflow:hidden;
+  }
+  .celebrate .heroArt img{width:100%;height:100%;object-fit:contain;display:block;}
+  .celebrate .heroTxt{
+    font-family:var(--serif);font-weight:700;font-size:19px;letter-spacing:.06em;
+    padding:4px 16px;border-radius:20px;
+  }
+  .celebrate.ok .heroTxt{color:#fff;background:var(--good);}
+  .celebrate .heroX{
+    font-size:74px;line-height:1;color:var(--bad);font-weight:700;font-family:var(--serif);
+    text-shadow:0 4px 14px rgba(178,58,72,.28);
+  }
+  /* 紙吹雪 */
+  .confetti{position:absolute;top:-14px;width:9px;height:14px;border-radius:2px;opacity:.95;
+    animation:confFall linear forwards;}
+  @keyframes confFall{
+    0%{transform:translateY(0) rotateZ(0);opacity:1;}
+    100%{transform:translateY(var(--fall)) rotateZ(var(--spin));opacity:.2;}
+  }
+
+  /* ---- カウントイン（③リズム耳コピ 予告） ---- */
+  .countin{
+    position:absolute;inset:0;z-index:28;pointer-events:none;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;border-radius:16px;
+    background:rgba(27,36,50,.06);
+  }
+  .countin .cnum{
+    font-family:var(--serif);font-weight:700;color:var(--accent);
+    font-size:96px;line-height:1;text-shadow:0 6px 22px rgba(192,71,43,.22);
+  }
+  .countin .cnum.beat{ animation:cntPop .48s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes cntPop{0%{transform:scale(.5);opacity:0;}45%{transform:scale(1.15);opacity:1;}100%{transform:scale(1);opacity:.85;}}
+  .countin .cgo{
+    font-family:var(--serif);font-weight:700;color:var(--good);font-size:56px;letter-spacing:.06em;
+    animation:cntPop .4s cubic-bezier(.2,1.4,.4,1);
+  }
+
+  /* ---- 音価てんびん（④） ---- */
+  .balance{
+    display:flex;flex-direction:column;align-items:center;gap:2px;margin:6px 0 2px;
+    font-size:60px;line-height:1;user-select:none;
+  }
+  .balance .scale{
+    transition:transform .7s cubic-bezier(.34,1.3,.5,1);transform:rotate(0deg);
+    transform-origin:50% 60%;
+  }
+  .balance.tilt-left .scale{transform:rotate(-13deg);}
+  .balance.tilt-right .scale{transform:rotate(13deg);}
+  .balance .cap{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px;}
+  /* 回答後の左右バー比較 */
+  .barcompare{
+    margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+    background:#fafaf7;
+  }
+  .barcompare .brow{display:flex;align-items:center;gap:10px;margin:7px 0;}
+  .barcompare .blabel{
+    font-family:var(--serif);font-weight:700;font-size:14px;color:var(--stave);
+    width:26px;flex:none;text-align:center;
+  }
+  .barcompare .btrack{flex:1;display:flex;align-items:center;gap:0;}
+  .barcompare .bfill{
+    height:20px;border-radius:5px;transition:width .6s cubic-bezier(.34,1.2,.5,1);
+    display:flex;align-items:center;
+  }
+  .barcompare .bwin{background:var(--good);}
+  .barcompare .blose{background:var(--bar-fill);opacity:.8;}
+  .barcompare .beq{background:var(--gold);}
+  .barcompare .bval{
+    font-size:12px;color:var(--stave);font-weight:600;margin-left:8px;white-space:nowrap;
+  }
+  .barcompare .bnote{font-size:12px;color:var(--muted);margin-top:8px;text-align:center;}
+
+  /* ---- reference (⑧ 解説) ---- */
+  .ref{font-size:14px;color:var(--ink);}
+  .ref h2{
+    font-family:var(--serif);font-size:17px;font-weight:700;color:var(--stave);
+    margin:0 0 4px;display:flex;align-items:center;gap:8px;letter-spacing:.02em;
+  }
+  .ref h2 .rn{
+    font-family:var(--sans);font-weight:700;font-size:13px;color:#1a1a1a;background:var(--accent);
+    width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;
+    justify-content:center;flex:none;
+  }
+  .ref section{
+    border:1px solid var(--line);border-radius:12px;padding:14px 15px;margin-bottom:12px;
+    background:#ffffff;
+  }
+  .ref p{margin:8px 0;line-height:1.65;}
+  .ref .lead{color:var(--stave);margin:2px 0 12px;}
+  .ref b{color:var(--ink);}
+  .ref .accent{color:var(--accent-deep);font-weight:700;}
+  /* 音符一覧テーブル */
+  .reftable{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;}
+  .reftable th,.reftable td{
+    border-bottom:1px solid var(--line);padding:8px 6px;text-align:center;vertical-align:middle;
+  }
+  .reftable th{color:var(--muted);font-weight:600;font-size:12px;}
+  .reftable td.nm{text-align:left;font-weight:600;color:var(--ink);white-space:nowrap;}
+  .reftable td.beat{font-family:var(--sans);color:var(--accent-deep);font-weight:700;}
+  .reftable .gl{display:flex;justify-content:center;align-items:center;min-height:44px;}
+  .reftable tr.rest-row td.nm{color:var(--stave);}
+  /* インライン譜例 */
+  .refstaff{
+    background:#fafaf7;border:1px solid var(--line);
+    border-radius:10px;padding:10px 6px;display:flex;justify-content:center;
+    overflow-x:auto;margin:10px 0;
+  }
+  .refstaff svg{display:block;}
+  /* 計算・等価の囲み */
+  .refbox{
+    background:var(--accent-soft);border-radius:9px;padding:9px 12px;margin:8px 0;
+    font-size:13px;color:var(--stave);
+  }
+  .refbox .eq{font-family:var(--serif);color:var(--ink);font-weight:700;}
+  .refnote{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;}
+  /* ポップ装飾 */
+  .refpop{
+    background:var(--good-soft);border-radius:9px;padding:10px 13px;margin:10px 0;
+    font-size:13.5px;color:var(--stave);line-height:1.7;border-left:4px solid var(--good);
+  }
+  .refpop b{color:var(--good);}
+  .refwhy{
+    display:inline-block;background:var(--gold);color:#fff;font-size:11px;font-weight:700;
+    border-radius:6px;padding:2px 8px;margin-right:6px;letter-spacing:.04em;
+  }
+  .fracbox{
+    display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:12px 0;
+  }
+  .fracchip{
+    background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:8px 12px;text-align:center;min-width:88px;
+  }
+  .fracchip .frac{font-family:var(--sans);font-size:18px;font-weight:700;color:var(--accent-deep);line-height:1.1;}
+  .fracchip .lbl{font-size:11px;color:var(--muted);margin-top:3px;}
+  .refgrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media(max-width:520px){ .refgrid2{grid-template-columns:1fr;} }
+
+  .toollabel2{display:none;}
+  footer{text-align:center;color:var(--muted);font-size:11px;margin-top:26px;letter-spacing:.03em;}
+
+  /* HUD右の進捗表示 */
+  /* ---- クリア演出モーダル（ことりノーム風） ---- */
+  .fc-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;
+    align-items:center;justify-content:center;backdrop-filter:blur(3px);}
+  .fc-overlay.on{display:flex;}
+  .fc-overlay canvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:201;}
+  .fc-modal{position:relative;z-index:202;background:var(--card);border-radius:22px;
+    padding:28px 22px 20px;width:min(320px,86vw);text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);animation:fcPop .4s cubic-bezier(.34,1.56,.64,1) both;}
+  @keyframes fcPop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+  .fc-stars{font-size:2rem;letter-spacing:.15em;margin-bottom:8px;animation:fcFloat 2s ease-in-out infinite;}
+  @keyframes fcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+  .fc-icon{font-size:3.2rem;line-height:1;margin-bottom:4px;}
+  .fc-title{font-size:1.6rem;font-weight:700;margin-bottom:2px;letter-spacing:.04em;color:var(--accent-deep);}
+  .fc-sub{font-size:.9rem;color:var(--stave);margin-bottom:6px;font-weight:600;}
+  .fc-score{font-size:.85rem;color:var(--muted);margin-bottom:18px;}
+  .fc-btns{display:flex;gap:8px;}
+  .fc-btns .btn{flex:1;}
+  /* ===================================================================
+     こども向けリニューアル（後追い上書き：丸く・大きく・やさしく）
+     =================================================================== */
+  h1{letter-spacing:.14em;font-size:1.4rem;}
+  .wrap{max-width:440px;}
+  /* タブ：4列×2段グリッド・ピル式（絵文字＋ラベル縦積み） */
+  nav.modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;border-bottom:none;margin:14px 0 6px;padding-bottom:0;}
+  nav.modes button{
+    flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    background:var(--card);border:1.5px solid var(--line);border-radius:13px;
+    padding:8px 3px 7px;color:var(--muted);margin-bottom:0;font-size:.72rem;
+    min-height:56px;line-height:1.15;
+  }
+  nav.modes button .ico{font-size:1.18rem;line-height:1;filter:grayscale(.2);opacity:.82;transition:.14s;}
+  nav.modes button .lbl{font-size:.7rem;white-space:nowrap;letter-spacing:0;}
+  nav.modes button[aria-selected="true"]{
+    background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep);
+    font-weight:700;box-shadow:0 2px 7px rgba(201,120,26,.15);
+  }
+  nav.modes button[aria-selected="true"] .ico{filter:none;opacity:1;transform:scale(1.1);}
+  /* --- 上位区分タブ（本番／練習／解説）--- */
+  /* 区分は数がいくつでも1行・等幅。折り返すと☰が縦に間延びするため列を自動で割る。 */
+  nav.sections{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;margin:14px 0 8px;}
+  nav.sections button.sec{
+    font-family:var(--round);font-weight:700;font-size:clamp(.72rem,3vw,.92rem);
+    border:1.5px solid var(--line);background:var(--card);color:var(--muted);
+    border-radius:14px;padding:12px 4px;cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:transform .12s,background .14s,border-color .14s,color .14s,box-shadow .14s;
+  }
+  nav.sections button.sec:active{transform:translateY(1px);}
+  nav.sections button.sec[aria-selected="true"]{
+    background:var(--accent-soft);border-color:var(--accent);color:var(--accent-deep);
+    box-shadow:0 2px 8px rgba(201,120,26,.16);
+  }
+  /* 本番区分：到達点として格上げ（🔥＋選択時は塗りつぶし）*/
+  nav.sections button.sec-main .sec-label::before{content:'🔥 ';font-size:.9em;}
+  nav.sections button.sec-main{border-color:var(--accent);color:var(--accent-deep);}
+  nav.sections button.sec-main[aria-selected="true"]{
+    background:linear-gradient(135deg,var(--accent),var(--accent-deep));
+    color:#fff;border-color:var(--accent-deep);
+    box-shadow:0 3px 11px rgba(201,120,26,.32);
+  }
+  /* 練習区分以外では下位グリッドを隠す */
+  nav.modes.hidden{display:none;}
+  /* --- タブ開閉（☰）：選択後は選択中タブのみ残してスッキリ --- */
+  .tabbar{display:flex;align-items:stretch;gap:6px;margin:14px 0 8px;}
+  .tabbar nav.sections{flex:1;margin:0;}
+  .tabtoggle{
+    flex:0 0 auto;width:42px;border:1.5px solid var(--line);background:var(--card);
+    border-radius:14px;color:var(--accent-deep);font-size:1.15rem;line-height:1;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:transform .12s,background .14s,border-color .14s;
+  }
+  .tabtoggle:active{transform:translateY(1px);}
+  .tabwrap:not(.collapsed) .tabtoggle{background:var(--accent-soft);border-color:var(--accent);}
+  /* 折りたたみ時：選択中のみ表示（上位・下位とも） */
+  .tabwrap.collapsed nav.sections{display:flex;}
+  .tabwrap.collapsed nav.sections button.sec[aria-selected="false"]{display:none;}
+  .tabwrap.collapsed nav.sections button.sec[aria-selected="true"]{flex:1;}
+  .tabwrap.collapsed nav.modes:not(.hidden){display:flex;margin-top:8px;}
+  .tabwrap.collapsed nav.modes button[aria-selected="false"]{display:none;}
+  .tabwrap.collapsed nav.modes button[aria-selected="true"]{flex:1;}
+  /* ごく狭い端末では1行に4つ入らないので、2×2に組み替える。
+     このとき☰が2行ぶんに伸びないよう、高さを固定して上に揃える。 */
+  @media(max-width:349px){
+    nav.sections{grid-auto-flow:row;grid-template-columns:repeat(2,1fr);}
+    .tabbar{align-items:flex-start;}
+    .tabtoggle{height:46px;}
+  }
+  /* 問題進行中：現在地ピルも隠し、☰だけ中央に（画像を主役に見せる） */
+  .tabwrap.collapsed.quiz-active .tabbar{justify-content:center;}
+  .tabwrap.collapsed.quiz-active nav.sections{display:none;}
+  .tabwrap.collapsed.quiz-active nav.modes{display:none;}
+  /* --- 本日クリア済みバッジ（絵文字／区分名の肩に金の✓）--- */
+  nav.modes button .ico{position:relative;}
+  nav.sections button.sec{position:relative;}
+  nav.modes button .ico .clr, nav.sections button.sec .clr{
+    position:absolute;top:-5px;right:-9px;
+    width:15px;height:15px;border-radius:50%;
+    background:linear-gradient(135deg,#f2b90c,#d98a00);color:#fff;
+    font-size:.6rem;font-weight:800;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--card);box-shadow:0 1px 3px rgba(160,110,0,.45);
+  }
+  nav.sections button.sec .sec-clr{top:8px;right:10px;}
+  nav.sections button.sec-main[aria-selected="true"] .sec-clr{border-color:var(--accent-deep);}
+  /* カード：ふっくら */
+  .card{border-radius:var(--radius);border:2px solid var(--line);padding:18px 15px 20px;}
+  /* 累積スタッツは隠し、セッション進捗を主役に */
+  .hud .stat{display:none;}
+  .hud{margin-top:2px;justify-content:flex-end;}
+  /* 選択肢：大きく丸く、押すとぷにっと */
+  .choices{gap:10px;margin-top:18px;}
+  .opt{border:2px solid var(--line);border-radius:16px;min-height:58px;font-size:15px;padding:14px 10px;box-shadow:0 2px 5px rgba(120,80,20,.06);transition:transform .1s,box-shadow .14s,background .14s,border-color .14s,color .14s;}
+  .opt .num{border-radius:9px;min-width:24px;height:24px;background:var(--paper2);border-color:var(--accent);}
+  .opt:active{transform:translateY(2px) scale(.98);box-shadow:0 1px 2px rgba(120,80,20,.04);}
+  .opt.correct{box-shadow:0 0 0 3px var(--good-soft);animation:optpop .34s ease;}
+  @keyframes optpop{0%{transform:scale(1)}45%{transform:scale(1.05)}100%{transform:scale(1)}}
+  /* ボタン：まるっと大きく */
+  .btn{border-radius:16px;padding:14px 18px;font-size:15px;border-width:2px;color:#fff;}
+  .btn,.btn.accent{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn.ghost{background:var(--card);color:var(--accent-deep);border-color:var(--accent);}
+  .seg{border-radius:12px;border-width:2px;}
+  .seg button{padding:7px 12px;font-weight:700;}
+  /* ==== セッション進捗バー（旧レベルパネル枠を流用） ==== */
+  .sessbar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--paper2);border:2px solid var(--line2);border-radius:14px;
+    padding:8px 12px;margin:4px 0 12px;flex-wrap:wrap;
+  }
+  .sessbar .qn{font-size:13px;color:var(--stave);font-weight:700;}
+  .sessbar .qn b{color:var(--accent-deep);font-size:16px;}
+  .sess-dots{display:flex;gap:6px;align-items:center;}
+  .sess-dots .d{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);background:var(--card);transition:.2s;font-size:11px;line-height:12px;text-align:center;color:#fff;}
+  .sess-dots .d.ok{background:var(--good);border-color:var(--good);}
+  .sess-dots .d.ng{background:var(--bad);border-color:var(--bad);}
+  .sess-dots .d.now{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  .sess-diff{font-size:12px;color:var(--muted);font-weight:700;}
+  .sess-diff b{color:var(--accent-deep);}
+  /* 結果オーバーレイの星を大きく */
+  .fc-stars{color:var(--star);}
+  /* ==== 難易度変化の告知 ==== */
+  .card{position:relative;}
+  .difftoast{
+    position:absolute;left:50%;top:8px;transform:translate(-50%,-16px);
+    display:flex;align-items:center;gap:8px;white-space:nowrap;
+    background:var(--accent);color:#fff;font-weight:800;font-size:14px;
+    padding:9px 16px;border-radius:999px;box-shadow:0 6px 18px rgba(120,80,20,.22);
+    opacity:0;pointer-events:none;transition:transform .28s cubic-bezier(.2,1.4,.4,1),opacity .28s;z-index:30;
+  }
+  .difftoast.down{background:var(--sky);color:#22506b;}
+  .difftoast b{font-weight:800;}
+  .difftoast .dt-ico{font-size:18px;line-height:1;}
+  .difftoast.show{opacity:1;transform:translate(-50%,0);}
+  @keyframes labflash{0%,100%{background:transparent}30%{background:var(--accent-soft)}}
+  .sess-diff.flash{animation:labflash .7s ease 2;border-radius:8px;padding:2px 6px;}
+  .sess-diff.flash b{color:var(--accent-deep);}
+  /* ==== デイリー達成画面（また明日） ==== */
+  .dailydone{text-align:center;padding:22px 10px 10px;}
+  .dailydone .dd-emoji{font-size:52px;line-height:1;}
+  .dailydone .dd-title{font-size:19px;font-weight:800;color:var(--accent-deep);margin-top:8px;}
+  .dailydone .dd-stars{font-size:30px;color:var(--star);letter-spacing:4px;margin:8px 0;}
+  .dailydone .dd-score{font-size:15px;color:var(--ink);}
+  .dailydone .dd-score b{color:var(--accent-deep);}
+  .dailydone .dd-streak{font-size:22px;font-weight:800;color:var(--accent-deep);margin:12px 0 4px;background:var(--accent-soft);border:2px solid var(--accent);border-radius:14px;padding:8px 14px;display:inline-block;}
+  .dailydone .dd-sub{font-size:13px;color:var(--muted);margin-top:10px;}
+
+  /* ============================================================
+     画面の状態：body に home / quiz / honban を付けて切り替える
+     - home  ：起動直後の「今日の練習」
+     - quiz  ：出題中。譜面に視線を集めるため周辺を静かにする
+     - honban：本番（腕だめし）。コンボと残り問題を強調する
+  ============================================================ */
+  /* --- 出題中は周辺を控えめにして、譜面と回答を主役にする --- */
+  body.quiz header{padding:10px 0 0;}
+  body.quiz h1{font-size:1.05rem;letter-spacing:.14em;}
+  body.quiz .sub{display:none;}
+  body.quiz .birdstage{margin:6px auto 0;}
+  body.quiz #birdGreen.sensei{width:min(210px,54vw);height:104px;border-width:2px;border-radius:14px;}
+  body.quiz .bubble{font-size:12.5px;padding:6px 12px;}
+  body.quiz #stageCard .hud{display:none;}          /* 累積statは進捗バーに任せる */
+  body.quiz .prompt{font-size:15px;margin-bottom:12px;}
+  body.quiz .stage{padding:20px 8px;}
+  body.quiz .stage svg{width:100%;height:auto;max-width:min(560px,92vw);}
+  body.quiz .sessbar{margin-bottom:14px;}
+  body.quiz .sessbar .qn b{font-size:19px;}
+  body.quiz .sess-dots .d{width:18px;height:18px;}
+
+  /* --- 本番（腕だめし）--- */
+  body.honban.quiz #stageCard{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 6px 20px rgba(0,0,0,.08);}
+  body.honban.quiz .sessbar{background:var(--accent-soft);border-color:var(--accent);}
+  .honban-tag{
+    font-size:11px;font-weight:800;letter-spacing:.12em;color:#fff;background:var(--accent);
+    border-radius:6px;padding:2px 8px;margin-right:6px;
+  }
+  .combo{font-size:12px;font-weight:800;color:var(--muted);}
+  .combo.on{color:var(--accent-deep);}
+  .combo .cn{font-size:17px;}
+  .combo.pop{animation:pop .32s ease;}
+  .remain{font-size:12px;font-weight:700;color:var(--stave);}
+  .remain b{color:var(--accent-deep);font-size:15px;}
+
+  /* --- ホーム画面 --- */
+  .home{padding:2px 0 6px;}
+  .home .hgreet{font-size:14px;color:var(--stave);font-weight:700;text-align:center;margin:0 0 4px;}
+  .home .hstreak{
+    text-align:center;font-size:13px;color:var(--muted);margin:0 0 14px;
+  }
+  .home .hstreak b{color:var(--accent-deep);font-size:20px;font-weight:800;}
+  .home h3{
+    font-family:var(--serif);font-size:14px;color:var(--stave);font-weight:700;
+    margin:16px 0 8px;display:flex;align-items:center;gap:6px;
+  }
+  .home .rec{
+    border:2px solid var(--accent);background:var(--accent-soft);border-radius:16px;
+    padding:14px;text-align:center;
+  }
+  .home .rec .rlabel{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--accent-deep);}
+  .home .rec .rname{font-size:19px;font-weight:800;color:var(--ink);margin:6px 0 2px;}
+  .home .rec .rwhy{font-size:12px;color:var(--stave);margin-bottom:12px;}
+  .home .dlist{display:flex;flex-direction:column;gap:8px;}
+  .home .drow{
+    display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+    border:2px solid var(--line);background:var(--card);border-radius:14px;
+    padding:11px 13px;cursor:pointer;font:inherit;transition:.12s;
+  }
+  .home .drow:active{transform:translateY(1px);}
+  .home .drow .dico{font-size:22px;flex:none;width:28px;text-align:center;}
+  .home .drow .dname{flex:1;font-size:14px;font-weight:700;color:var(--ink);}
+  .home .drow .dstat{font-size:11px;font-weight:800;letter-spacing:.06em;flex:none;}
+  .home .drow.done{border-color:var(--good);background:var(--good-soft);}
+  .home .drow.done .dstat{color:var(--good);}
+  .home .drow.mid{border-color:var(--accent);}
+  .home .drow.mid .dstat{color:var(--accent-deep);}
+  .home .drow.todo .dstat{color:var(--muted);}
+  .home .drow .dstars{font-size:12px;color:var(--star);letter-spacing:1px;}
+  .home .hall{
+    text-align:center;border:2px solid var(--gold);background:#fffdf3;border-radius:16px;
+    padding:14px;font-size:14px;font-weight:700;color:var(--accent-deep);
+  }
+
+  /* --- 回答後の流れ（結果 → 理由 → つぎへ）--- */
+  .fb .verdict{font-size:17px;font-weight:800;}
+  .fb .reason{display:block;font-size:13px;margin-top:4px;opacity:.92;}
+  .row.afteranswer{animation:fadeUp .3s ease both;animation-delay:.18s;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  /* --- 音価てんびん：比較のアニメーション --- */
+  .balance .scale.swing{animation:balSwing .5s ease;}
+  @keyframes balSwing{0%{transform:rotate(0);}30%{transform:rotate(-6deg);}60%{transform:rotate(5deg);}100%{transform:rotate(0);}}
+  .barcompare .bdiff{
+    text-align:center;font-size:13px;font-weight:800;color:var(--accent-deep);
+    margin-top:10px;opacity:0;transition:opacity .3s ease;
+  }
+  .barcompare .bdiff.on{opacity:1;}
+  .barcompare .btrack{position:relative;}
+  .barcompare .bmark{
+    position:absolute;top:-4px;bottom:-4px;width:0;border-left:2px dashed var(--stave);
+    opacity:0;transition:opacity .3s ease .55s;
+  }
+  .barcompare .bmark.on{opacity:.55;}
+
+  /* ============================================================
+     ボタンの役割は3段階。見た目で優先度が分かるようにする。
+       .btn        … 主ボタン（塗り）。1つの画面に1つだけ
+       .btn.ghost  … 補助（白地＋アクセント枠）。何度でも押せる操作
+       .btn.sub    … 控えめ（白地＋グレー枠）。取り消し系
+     並び順は「補助 → 主」。主ボタンは常に最下段・全幅に置く。
+  ============================================================ */
+  .btn.sub{background:var(--card);color:var(--muted);border-color:var(--line);font-weight:600;}
+  .btn.sub:disabled{opacity:.4;}
+  #controls{gap:8px;}
+  #controls.stack{flex-direction:column;align-items:stretch;}
+  #controls.stack>.btn{width:100%;}
+  #controls .subrow{display:grid;grid-template-columns:2fr 1fr;gap:8px;width:100%;}
+  #controls .subrow .btn{width:100%;}
+  #controls.split{display:grid;grid-template-columns:1fr 1fr;}
+  #controls.split .btn{width:100%;}
+  /* 残り拍数の案内（④耳コピ） */
+  .remainbeats{
+    text-align:center;font-size:12px;color:var(--muted);font-weight:700;margin-top:6px;
+  }
+  .remainbeats.full{color:var(--good);}
+  /* 操作行の外に置く主ボタン（ホーム・デイリー完了画面）も全幅に揃える */
+  .home .rec .btn, .dailydone .btn{width:100%;display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>リズトレ</h1>
+    <p class="sub">おんぷの ながさを、目と耳で。</p>
+    <div class="birdstage" id="birdstage">
+      <div class="bubble" id="birdBubble"><span id="bubbleTxt">いっしょに 練習しよう！</span></div>
+      <div class="birds">
+        <!-- ▼ マスコット：ヨルハ先生（画像はこのHTML内に埋め込み済み）▼
+             ★yoruha-sensei.jpeg をHTMLに直接埋め込んでいます。画像ファイルを
+               同じフォルダに置く必要はありません。
+               id="birdGreen"/class="bird sensei" は残しているので、
+               正解＝ぴょこ跳ね／不正解＝ゆらり のアニメはそのまま効きます。 -->
+        <img class="bird sensei" id="birdGreen" src="data:image/jpeg;base64,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" alt="ヨルハ先生">
+      </div>
+    </div>
+  </header>
+
+  <div class="tabwrap collapsed" id="tabwrap">
+    <div class="tabbar">
+      <button class="tabtoggle" id="tabToggle" type="button" aria-label="タブを開閉" aria-expanded="false">☰</button>
+      <nav class="sections" id="sections" role="tablist"></nav>
+    </div>
+    <nav class="modes" id="modes" role="tablist"></nav>
+  </div>
+
+  <div class="card" id="stageCard">
+    <div class="hud">
+      <div class="stat">
+        <span>正答 <b id="hScore">0</b></span>
+        <span>出題 <b id="hTotal">0</b></span>
+        <span class="streak">連続 <b id="hStreak">0</b>🔥</span>
+      </div>
+      <div id="hudRight"></div>
+    </div>
+    <div id="levelPanel"></div>
+    <p class="prompt" id="prompt"></p>
+    <div id="body"></div>
+    <div class="fb" id="fb"></div>
+    <div class="row" id="controls"></div>
+  </div>
+
+  <footer>百合ヶ丘ギター教室 SingingBirds ／ オフライン動作・単一ファイル <span style="opacity:.5;font-size:.85em">build&nbsp;0711-e</span></footer>
+</div>
+
+<div class="fc-overlay" id="fcOverlay">
+  <canvas id="fcConfetti"></canvas>
+  <div class="fc-modal" id="fcModal">
+    <div class="fc-stars" id="fcStars"></div>
+    <div class="fc-icon" id="fcIcon"></div>
+    <div class="fc-title" id="fcTitle"></div>
+    <div class="fc-sub" id="fcSub"></div>
+    <div class="fc-score" id="fcScore"></div>
+    <div class="fc-btns">
+      <button class="btn ghost" id="fcRetry">もう一度</button>
+      <button class="btn" id="fcClose">とじる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   リズトレ  Note-Value Trainer
+   8タブ：①穴うめ ②ながさ当て ③なまえ当て ④耳コピ ⑤音価てんびん ⑥小節けいさつ ⑦腕だめし ⑧解説
+   単一HTML・オフライン・iOS WKWebView 配慮
+============================================================ */
+
+/* ---------- 1拍=48tick 統一 ---------- */
+const T = 48; // ticks per beat
+const DUR = {
+  whole:     {tick:192, name:'全音符',      short:'全',   dots:0, base:'whole'},
+  dotHalf:   {tick:144, name:'付点二分音符', short:'付2分', dots:1, base:'half'},
+  half:      {tick:96,  name:'二分音符',    short:'2分',  dots:0, base:'half'},
+  dotQuarter:{tick:72,  name:'付点四分音符', short:'付4分', dots:1, base:'quarter'},
+  quarter:   {tick:48,  name:'四分音符',    short:'4分',  dots:0, base:'quarter'},
+  dotEighth: {tick:36,  name:'付点八分音符', short:'付8分', dots:1, base:'eighth'},
+  eighth:    {tick:24,  name:'八分音符',    short:'8分',  dots:0, base:'eighth'},
+  sixteenth: {tick:12,  name:'十六分音符',  short:'16分', dots:0, base:'sixteenth'},
+};
+const beats = t => t/T;
+const beatStr = t => {
+  const b = t/T;
+  if(Number.isInteger(b)) return b+'拍';
+  return (b).toString()+'拍';
+};
+
+/* ============================================================
+   拍子（メーター）ヘルパー
+   sig は [分子, 分母]。分母4＝単純拍子（四分音符＝1拍）、
+   分母8で分子が3の倍数＝複合拍子（付点四分音符＝1拍、八分3つでひとまとまり）。
+   ENABLE_68 を false にすると、6/8 が解説からも練習からも一括で外れる。
+============================================================ */
+const ENABLE_68 = true;
+const SIG_SIMPLE = [[2,4],[3,4],[4,4]];
+const SIG_ALL = () => ENABLE_68 ? SIG_SIMPLE.concat([[6,8]]) : SIG_SIMPLE.slice();
+const isCompound = sig => !!sig && sig[1]===8 && sig[0]%3===0;
+// 1小節ぶんのtick（全音符＝192tick）
+const barTickOf = sig => sig[0]*(192/sig[1]);
+// 拍（脈）1つぶんのtick。複合拍子は付点四分＝72tick
+const pulseTickOf = sig => isCompound(sig) ? (192/sig[1])*3 : (192/sig[1]);
+// 拍の数。6/8 は「2拍を3つ割り」なので2
+const pulseCountOf = sig => isCompound(sig) ? sig[0]/3 : sig[0];
+// 1小節の長さの説明ラベル
+function barLenLabel(sig){
+  if(isCompound(sig)) return `八分音符${sig[0]}つ（＝${pulseCountOf(sig)}拍を3つずつ）`;
+  return `${sig[0]}拍`;
+}
+// 連桁をまとめる単位(tick)。実際の記譜習慣に合わせる
+function beamUnitOf(sig, hasSixteenth){
+  if(isCompound(sig)) return pulseTickOf(sig);   // 複合拍子：八分3つ（付点四分）ごと
+  if(hasSixteenth) return T;                     // 十六分をふくむときは1拍ごと
+  if(sig && sig[0]===3) return T;                // 3拍子は1拍ごと
+  return 2*T;                                    // 4拍子・2拍子は2拍ごと
+}
+// タイ分割（拍でまとめた形）は四分＝1拍の単純拍子でのみ有効
+const canTie = sig => !isCompound(sig);
+
+/* ---------- 音符SVG描画 ---------- */
+// 1音符を単体で描く（凡例・選択肢用）
+function noteGlyph(key, opt={}){
+  const d = DUR[key]; if(!d) return '';
+  const w = opt.w||34, h = opt.h||46, col = opt.color||'var(--ink)';
+  const rest = opt.rest;
+  const cx = 13, baseY = 30; // 符頭中心
+  let g='';
+  if(rest){
+    // 単体表示時はグリフ枠の中央に光学センタリング
+    g = restPath(d.base, w/2, h/2-(REST_VCENTER[d.base]||16), col, d.dots, true);
+  }else{
+    // 符頭
+    const filled = (d.base==='eighth'||d.base==='sixteenth'||d.base==='quarter');
+    g += `<g transform="translate(${cx},${baseY}) rotate(-20)">
+      <ellipse cx="0" cy="0" rx="6" ry="4.5" fill="${filled?col:'none'}"${filled?'':` stroke="${col}" stroke-width="1.8"`}/></g>`;
+    // 符幹（二分・四分・八分・十六）: 全音符は無し
+    if(d.base!=='whole'){
+      g += `<line x1="${cx+5.4}" y1="${baseY-1}" x2="${cx+5.4}" y2="6" stroke="${col}" stroke-width="1.7"/>`;
+    }
+    // 符鉤
+    if(d.base==='eighth'){
+      g += flag(cx+5.4,6,col,0);
+    }else if(d.base==='sixteenth'){
+      g += flag(cx+5.4,6,col,0)+flag(cx+5.4,6,col,7);
+    }
+    // 付点
+    if(d.dots){ g += `<circle cx="${cx+13}" cy="${baseY+1}" r="1.9" fill="${col}"/>`; }
+  }
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${g}</svg>`;
+}
+function flag(x,y,col,dy){
+  // ことりノーム drawFlags と同一のベジェ形状
+  return `<path d="M ${x} ${y+dy} C ${x+10} ${y+dy+3} ${x+11} ${y+dy+10} ${x+6} ${y+dy+16}
+    C ${x+11} ${y+dy+9} ${x+9} ${y+dy+4} ${x} ${y+dy+5} Z" fill="${col}"/>`;
+}
+function restPath(base,x,y,col,dots,standalone){
+  // 座標規約: y+16 が五線の第3線（中央線）。lineGap=8 → 五線は y+0 / y+8 / y+16 / y+24 / y+32
+  // 休符の形はことりノーム drawRestSVG と同一。bY をことりノームの baseY 相当（=y+33）に置いて移植し、
+  // 五線の座標系（y+16=中央線）に合わせて上下位置を調整する。
+  let p='';
+  const bY = y+33;
+  if(base==='whole'){        // 全休符：第4線（上から2本目）から「ぶら下がる」
+    p=`<rect x="${x-5.5}" y="${y+8}" width="11" height="4.2" fill="${col}"/>`;
+    // 単体表示（五線なし）では、接する第4線を短く添えて二分休符と区別できるようにする
+    if(standalone) p+=`<line x1="${x-9}" y1="${y+8}" x2="${x+9}" y2="${y+8}" stroke="${col}" stroke-width="1.3"/>`;
+  }else if(base==='half'){   // 二分休符：第3線（中央線）の上に「乗る」
+    p=`<rect x="${x-5.5}" y="${y+11.8}" width="11" height="4.2" fill="${col}"/>`;
+    if(standalone) p+=`<line x1="${x-9}" y1="${y+16}" x2="${x+9}" y2="${y+16}" stroke="${col}" stroke-width="1.3"/>`;
+  }else if(base==='quarter'){ // 四分休符（ことりノーム流の稲妻）
+    const t=bY-34;
+    p=`<path d="M ${x-3} ${t} L ${x+4} ${t+8} L ${x-3} ${t+17} L ${x+5} ${t+26} Q ${x-4} ${t+22} ${x+2} ${t+33} Q ${x-6} ${t+26} ${x-1} ${t+20} L ${x-7} ${t+12} Q ${x+1} ${t+15} ${x-4} ${t+6} Z" fill="${col}"/>`;
+  }else if(base==='eighth'){ // 八分休符（ことりノーム流：玉＋カール＋斜線）
+    const t=bY-30;
+    p=`<circle cx="${x-1}" cy="${t+2}" r="3" fill="${col}"/>`
+     +`<path d="M ${x-1} ${t+2} Q ${x+4} ${t+1} ${x+5} ${t-2}" fill="none" stroke="${col}" stroke-width="1.6"/>`
+     +`<line x1="${x+4}" y1="${t+1}" x2="${x-4}" y2="${t+22}" stroke="${col}" stroke-width="1.8"/>`;
+  }else{                     // 十六分休符（ことりノーム流：玉2つ＋斜線）
+    const t=bY-32;
+    p=`<circle cx="${x-1}" cy="${t+2}" r="2.8" fill="${col}"/>`
+     +`<path d="M ${x-1} ${t+2} Q ${x+4} ${t+1} ${x+5} ${t-2}" fill="none" stroke="${col}" stroke-width="1.5"/>`
+     +`<circle cx="${x-3}" cy="${t+11}" r="2.8" fill="${col}"/>`
+     +`<path d="M ${x-3} ${t+11} Q ${x+2} ${t+10} ${x+3} ${t+7}" fill="none" stroke="${col}" stroke-width="1.5"/>`
+     +`<line x1="${x+4}" y1="${t+1}" x2="${x-6}" y2="${t+26}" stroke="${col}" stroke-width="1.8"/>`;
+  }
+  if(dots){ p+=`<circle cx="${x+8.5}" cy="${y+12}" r="1.9" fill="${col}"/>`; } // 付点は第3間相当
+  return p;
+}
+// 休符ごとの光学的中心（単体グリフの上下センタリング用）
+const REST_VCENTER={whole:10, half:14, quarter:16, eighth:14, sixteenth:15};
+
+// 五線譜に音符列を描く（穴埋め・警察・聴音の答え合わせ用）
+/* ---------- 音価分割＋タイ（ことりノーム流） ----------
+   拍・小節をまたぐ音価を「拍をまたがぬ単一音価」に分割し、2つ目以降にtieを付ける。
+   ことりノームは16分=1unit・拍=4unitのunit系。リズトレは16分=12tick・拍=48tickなので u = tick/12 で換算する。 */
+function scoreKey(base,dot){
+  if(base==='whole') return 'whole';
+  if(base==='half') return dot?'dotHalf':'half';
+  if(base==='quarter') return dot?'dotQuarter':'quarter';
+  if(base==='eighth') return dot?'dotEighth':'eighth';
+  return 'sixteenth';
+}
+function scoreSplitTick(startTick,lenTick,totalTick){
+  const BU=4, SINGLE=new Set([16,12,8,6,4,3,2,1]);
+  const TBL=[{u:16,base:'whole',dot:false},{u:12,base:'half',dot:true},{u:8,base:'half',dot:false},{u:6,base:'quarter',dot:true},{u:4,base:'quarter',dot:false},{u:3,base:'eighth',dot:true},{u:2,base:'eighth',dot:false},{u:1,base:'sixteenth',dot:false}];
+  const start=startTick/12, len=lenTick/12, notes=[];
+  // 小節のまん中（偶数拍子のみ）を「音符でまたいではいけない」境界として保護する。
+  // 4/4→8unit（3拍目）／2/4→4unit（2拍目）。3拍子など奇数拍はまん中が拍の途中に来るため保護しない。
+  const totalU = totalTick ? Math.round(totalTick/12) : 0;
+  const beats = totalU/BU;
+  const mid = (totalU>0 && Number.isInteger(beats) && beats%2===0) ? totalU/2 : null;
+  const emit=(s,l)=>{
+    if(SINGLE.has(l)){
+      const io=s%BU;
+      // 小節先頭(0)から始まる音符（全音符・付点二分など）は許容。途中から始まってまん中をまたぐ音符のみ分割。
+      const crossesMid = (mid!=null && s>0 && s<mid && s+l>mid);
+      if((io+l<=BU || io===0) && !crossesMid){ notes.push(TBL.find(n=>n.u===l)); return; }
+    }
+    const io=s%BU, toEnd=io===0?BU:(BU-io), first=Math.min(l,toEnd);
+    if(!SINGLE.has(first)){ let r=first; while(r>0){ const nt=TBL.find(n=>n.u<=r); notes.push(nt); r-=nt.u; } }
+    else notes.push(TBL.find(n=>n.u===first));
+    const rem=l-first; if(rem>0) emit(s+first,rem);
+  };
+  emit(start,len);
+  return notes.map(n=>({key:scoreKey(n.base,n.dot), tick:n.u*12}));
+}
+function scoreSplitRestTick(startTick,lenTick,totalTick){
+  const BU=4, baseU={whole:16,half:8,quarter:4,eighth:2,sixteenth:1};
+  const start=startTick/12, len=lenTick/12, total=totalTick?Math.round(totalTick/12):0;
+  if(total && start===0 && len===total) return [{key:'whole', tick:16*12}];
+  const out=[], halfUnit=BU*2;
+  const push=(name,dot)=>{ const u=baseU[name]*(dot?1.5:1); out.push({key:scoreKey(name,dot), tick:u*12}); };
+  const fillBeat=(off,length)=>{
+    if(off===0 && length===BU){ push('quarter',false); return; }
+    let s=off, e=off+length;
+    while(s<e){
+      const eStart=Math.floor(s/2)*2;
+      if(s===eStart && s+2<=e){ push('eighth',false); s+=2; }
+      else { const segEnd=Math.min(eStart+2,e); for(let k=s;k<segEnd;k++) push('sixteenth',false); s=segEnd; }
+    }
+  };
+  let s=start, end=start+len;
+  while(s<end){
+    if(total && s%halfUnit===0 && s+halfUnit<=end && s+halfUnit<=total){ push('half',false); s+=halfUnit; continue; }
+    const beatStart=Math.floor(s/BU)*BU, segEnd=Math.min(beatStart+BU,end);
+    fillBeat(s-beatStart, segEnd-s); s=segEnd;
+  }
+  return out;
+}
+// 音符列を「単一音価＋タイ」へ展開。空欄(blank)は分割しない（穴埋めの答えを守る）。
+function expandTies(seq,totalTick){
+  const out=[]; let acc=0;
+  for(let idx=0; idx<seq.length; idx++){
+    const n=seq[idx];
+    const tick=n.tick||(DUR[n.key]||{tick:48}).tick;
+    if(n.blank){ out.push({...n,tick,tie:false,_src:idx}); acc+=tick; continue; }
+    if(n.rest){
+      const pcs=scoreSplitRestTick(acc,tick,totalTick);
+      if(pcs.length) pcs.forEach(p=>out.push({key:p.key,rest:true,mark:n.mark,tick:p.tick,tie:false,_src:idx}));
+      else out.push({...n,tick,tie:false,_src:idx});
+      acc+=tick; continue;
+    }
+    const pcs=scoreSplitTick(acc,tick,totalTick);
+    if(pcs.length) pcs.forEach((p,i)=>out.push({key:p.key,mark:n.mark,tick:p.tick,tie:i>0,_src:idx}));
+    else out.push({...n,tick,tie:false,_src:idx});
+    acc+=tick;
+  }
+  return out;
+}
+
+function staffSVG(seq, opt={}){
+  // seq: [{key, rest, blank, mark}]
+  const pad=18, slotMin=42, top=14, staveH=48, height=86;
+  const totalTick = opt.totalTick || seq.reduce((s,n)=>s+(n.tick||DUR[n.key].tick),0) || 192;
+  // 幅は tick に比例（音価バー的発想）
+  const meterSig = opt.meterSig || null;   // [分子,分母] 例[4,4]
+  const SIG = meterSig ? 24 : 0;            // 拍子記号ぶんの左スペース
+  // 拍・小節をまたぐ音価を単一音価＋タイに展開（ことりノーム流）。
+  // 出題では分割せず元のまま。回答（答え合わせ）表示のときだけ opt.tie:true で有効化する。
+  if(opt.tie===true) seq = expandTies(seq, totalTick);
+  const ticksArr = seq.map(n=>n.tick||(DUR[n.key]||{tick:48}).tick);
+  const sumTicks = ticksArr.reduce((a,b)=>a+b,0) || totalTick;
+  // --- tick比例配置：1拍あたり一定幅で並べ、音符を時間位置（拍）に置く ---
+  //   拍が均等に区切られ、再生バーが一定速度で進む。各音符幅は音価に比例。
+  const beatW = 66;                                   // 1拍あたりの幅(px)
+  const barBeats = Math.max(sumTicks, totalTick)/T;   // 表示する拍数（不足小節は末尾に空白）
+  const usable = Math.max(barBeats*beatW, 320);
+  const noteOff = 9;                                  // スロット頭からの音符位置（一定＝バー等速）
+  const widths = ticksArr.map(tk => (tk/(barBeats*T))*usable);
+  let x = pad + SIG;
+  const y0 = top; // 五線最上
+  const lineGap=8;
+  // --- 終止線の位置 ---
+  // opt.barTick 指定時（正解表示用）：超過小節では終止線を本来の拍位置に置き、
+  // 超過分の音符が終止線をはみ出して見えるようにする
+  let barX = usable + pad + SIG, overZone = '';
+  if(opt.barTick && sumTicks > opt.barTick){
+    let acc = 0, bx = pad + SIG;
+    for(let i=0;i<seq.length;i++){
+      if(acc + ticksArr[i] >= opt.barTick){
+        bx += widths[i] * ((opt.barTick - acc) / ticksArr[i]);
+        break;
+      }
+      acc += ticksArr[i]; bx += widths[i];
+    }
+    barX = bx;
+    overZone = `<rect x="${barX}" y="${y0-8}" width="${usable+pad+SIG-barX+4}" height="${4*lineGap+16}" fill="var(--bad)" opacity="0.08"/>`+
+      `<text x="${Math.min((barX+usable+pad+SIG)/2, usable+pad+SIG-6)}" y="${y0+4*lineGap+18}" text-anchor="middle" font-size="10" fill="var(--bad)">はみ出し</text>`;
+  }
+  let lines='';
+  for(let i=0;i<5;i++){ const yy=y0+i*lineGap; lines+=`<line x1="0" x2="${usable+pad*2+SIG}" y1="${yy}" y2="${yy}" stroke="var(--stave)" stroke-width="1"/>`;}
+  // 拍子記号（分子・分母を縦2段。譜頭の開始線の直後に置く）
+  const sigSVG = meterSig ? (
+    `<text x="${pad+SIG/2}" y="${y0+lineGap+3}" text-anchor="middle" font-family="var(--sans)" font-weight="700" font-size="16" fill="var(--stave)">${meterSig[0]}</text>`+
+    `<text x="${pad+SIG/2}" y="${y0+3*lineGap+4}" text-anchor="middle" font-family="var(--sans)" font-weight="700" font-size="16" fill="var(--stave)">${meterSig[1]}</text>`
+  ) : '';
+  // 小節線
+  // 拍頭ガイド（薄い破線）：拍をまたぐ連桁でも拍の切れ目が一目で分かるように
+  let beatGuides='';
+  {
+    // 音符がまだ無い（空の五線）ときは、小節幅を均等割りして拍の位置を出す
+    const tickToX=(tk)=>{
+      if(!seq.length) return pad+SIG+usable*(tk/Math.max(totalTick,1));
+      let acc=0, xx=pad+SIG;
+      for(let i=0;i<seq.length;i++){ if(tk<acc+ticksArr[i]) return xx+widths[i]*((tk-acc)/ticksArr[i]); acc+=ticksArr[i]; xx+=widths[i]; }
+      return xx;
+    };
+    // 複合拍子では「八分3つ」のまとまりに、それ以外は1拍ごとにガイドを引く
+    const gUnit = isCompound(meterSig) ? pulseTickOf(meterSig) : T;
+    const nGuide=Math.max(1,Math.round(totalTick/gUnit));
+    for(let b=1;b<nGuide;b++){
+      const gx=tickToX(b*gUnit);
+      if(gx>pad+SIG+2 && gx<barX-2){
+        beatGuides+=`<line x1="${gx.toFixed(1)}" x2="${gx.toFixed(1)}" y1="${y0}" y2="${y0+4*lineGap}" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 3" opacity="0.75"/>`;
+      }
+    }
+  }
+  lines=`<rect x="0" y="0" width="${usable+pad*2+SIG}" height="${height}" fill="none"/>`+overZone+
+        `<line x1="${pad-6}" x2="${pad-6}" y1="${y0}" y2="${y0+4*lineGap}" stroke="var(--stave)" stroke-width="1.4"/>`+
+        sigSVG+beatGuides+
+        `<line x1="${barX}" x2="${barX}" y1="${y0}" y2="${y0+4*lineGap}" stroke="${overZone?'var(--bad)':'var(--stave)'}" stroke-width="1.4"/>`+lines;
+  let notes='';
+  const midY=y0+2*lineGap;
+  // --- 符頭x座標を事前計算（連桁のグルーピングに使用） ---
+  const cxArr=[]; { let xx=pad+SIG; for(let i=0;i<seq.length;i++){ cxArr.push(xx+noteOff); xx+=widths[i]; } }
+  // 各音符の開始tick（拍位置判定用）
+  const startTick=[]; { let acc=0; for(let i=0;i<seq.length;i++){ startTick.push(acc); acc+=ticksArr[i]; } }
+  // --- 連桁グループの決定（opt.beam時） ---
+  // まとめ単位は beamUnitOf() が拍子から決める。
+  //   4/4・2/4 = 八分は2拍ごと（八分4つで1本）／3/4 = 1拍ごと／6/8 = 八分3つごと。
+  //   十六分をふくむ連桁は1拍ごとに区切り、拍を明確にする（複合拍子は3つ割りを優先）。
+  const beamOf=new Array(seq.length).fill(null);
+  if(opt.beam){
+    // パス1：連続する連桁可能音符（八分・十六分）をひとまとまりに（休符・空欄・四分以上で切る）
+    const runs=[]; let run=[];
+    for(let i=0;i<seq.length;i++){
+      const n=seq[i], d=DUR[n.key]||{base:'quarter',tick:48};
+      const beamable = !n.rest && !n.blank && (d.base==='eighth'||d.base==='sixteenth');
+      if(beamable) run.push(i); else { if(run.length) runs.push(run); run=[]; }
+    }
+    if(run.length) runs.push(run);
+    // パス2：各runを beamUnitOf() の単位で分割する。
+    runs.forEach(r=>{
+      const hasSixteenth = r.some(gi=>(DUR[seq[gi].key]||{}).base==='sixteenth');
+      const unit = beamUnitOf(meterSig, hasSixteenth);
+      let sub=[];
+      const flushSub=()=>{ if(sub.length>=2){ const g=sub.slice(); g.forEach(gi=>beamOf[gi]=g); } sub=[]; };
+      r.forEach(gi=>{
+        if(sub.length && Math.floor(startTick[gi]/unit)!==Math.floor(startTick[sub[0]]/unit)) flushSub();
+        sub.push(gi);
+      });
+      flushSub();
+    });
+  }
+  // 符幹の先端y（符頭中心midYからの相対）。連桁時はグループ内で統一
+  const STEM_TOP=-24;
+  seq.forEach((n,idx)=>{
+    const d=DUR[n.key]||{base:'quarter',dots:0,tick:48};
+    const slotW = widths[idx];
+    const cx=x+noteOff;
+    const col = n.mark==='ok'?'var(--good)':n.mark==='ng'?'var(--bad)':'var(--ink)';
+    const beamed = beamOf[idx];
+    const src = (n._src!=null) ? n._src : idx;   // ハイライト用：元の音符番号
+    if(n.blank){
+      notes+=`<rect x="${x+6}" y="${y0-6}" width="${slotW-14}" height="${4*lineGap+12}" rx="7"
+        fill="var(--accent-soft)" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1.3"/>
+        <text x="${cx}" y="${midY+4}" text-anchor="middle" font-family="Georgia,serif" font-size="18" fill="var(--accent)">?</text>`;
+    }else if(n.rest){
+      notes+=`<g class="snote" data-src="${src}" data-cx="${cx.toFixed(1)}" transform="translate(${cx-15},${midY-16})">${restPath(d.base,15,0,col,d.dots)}</g>`;
+    }else{
+      const filled=(d.base==='eighth'||d.base==='sixteenth'||d.base==='quarter');
+      notes+=`<g class="snote" data-src="${src}" data-cx="${cx.toFixed(1)}" transform="translate(${cx},${midY})">
+        <g transform="rotate(-20)"><ellipse rx="6" ry="4.5" fill="${filled?col:'none'}"${filled?'':` stroke="${col}" stroke-width="1.8"`}/></g>`;
+      if(d.base!=='whole') notes+=`<line x1="5.4" y1="-1" x2="5.4" y2="${STEM_TOP}" stroke="${col}" stroke-width="1.8"/>`;
+      // 連桁対象は個別フラッグを描かない（ビームで後からつなぐ）
+      if(!beamed){
+        if(d.base==='eighth') notes+=flag(5.4,STEM_TOP,col,0);
+        if(d.base==='sixteenth') notes+=flag(5.4,STEM_TOP,col,0)+flag(5.4,STEM_TOP,col,7);
+      }
+      if(d.dots) notes+=`<circle cx="13" cy="1" r="2" fill="${col}"/>`;
+      notes+=`</g>`;
+    }
+    x+=slotW;
+  });
+  // --- 連桁本体の描画（符幹先端どうしを横棒でつなぐ） ---
+  if(opt.beam){
+    const seen=new Set();
+    const beamY = midY + STEM_TOP;              // ビーム上辺のy（符幹先端）
+    const stemX = i => cxArr[i] + 5.4; // 符幹は回転させていないため x=5.4（符頭中心cx基準）ぴったりに合わせる
+    seq.forEach((n,idx)=>{
+      const g=beamOf[idx];
+      if(!g || seen.has(g)) return; seen.add(g);
+      const col = n.mark==='ok'?'var(--good)':n.mark==='ng'?'var(--bad)':'var(--ink)';
+      const x1=stemX(g[0]), x2=stemX(g[g.length-1]);
+      // 1次ビーム（八分＝全員が持つ）
+      notes+=`<line x1="${x1.toFixed(1)}" y1="${beamY}" x2="${x2.toFixed(1)}" y2="${beamY}" stroke="${col}" stroke-width="3.4" stroke-linecap="butt"/>`;
+      // 2次ビーム（十六分のみ。連続区間ごとに短い横棒、単独なら内側へ跳ねる）
+      const y2nd=beamY+5;
+      for(let j=0;j<g.length;j++){
+        const gi=g[j]; const dd=DUR[seq[gi].key];
+        if(dd.base!=='sixteenth') continue;
+        const prev16 = j>0 && DUR[seq[g[j-1]].key].base==='sixteenth';
+        const next16 = j<g.length-1 && DUR[seq[g[j+1]].key].base==='sixteenth';
+        if(next16){
+          notes+=`<line x1="${stemX(gi).toFixed(1)}" y1="${y2nd}" x2="${stemX(g[j+1]).toFixed(1)}" y2="${y2nd}" stroke="${col}" stroke-width="3.4"/>`;
+        }else if(!prev16){
+          // 前後とも十六分でない単独 → 部分ビーム（stub）は拍の内側を向く：
+          // 拍の後半にある十六分は左（拍頭側）、前半にある十六分は右（次の音側）。
+          // 例）付点八分＋十六分→左向き／十六分＋付点八分→右向き。
+          const posInBeat = startTick[gi] % T;
+          const dir = (posInBeat >= T/2) ? -1 : 1;
+          notes+=`<line x1="${stemX(gi).toFixed(1)}" y1="${y2nd}" x2="${(stemX(gi)+dir*6).toFixed(1)}" y2="${y2nd}" stroke="${col}" stroke-width="3.4"/>`;
+        }
+      }
+    });
+  }
+  // タイ弧線（ことりノーム流）：分割で生じた同音を弧でつなぐ
+  seq.forEach((n,idx)=>{
+    if(!n.tie || idx===0) return;
+    const px=cxArr[idx-1], cx=cxArr[idx];
+    const col = n.mark==='ok'?'var(--good)':n.mark==='ng'?'var(--bad)':'var(--ink)';
+    notes+=`<path d="M ${(px+3).toFixed(1)} ${midY+8} Q ${((px+cx)/2).toFixed(1)} ${midY+16} ${(cx-3).toFixed(1)} ${midY+8}" fill="none" stroke="${col}" stroke-width="1.2"/>`;
+  });
+  return `<svg width="${usable+pad*2+SIG}" height="${height}" viewBox="0 0 ${usable+pad*2+SIG} ${height}" xmlns="http://www.w3.org/2000/svg">${lines}${notes}</svg>`;
+}
+
+// 音価バー（長さ比較の signature）
+function durBar(tick, opt={}){
+  const unit = opt.unit||42; // 1拍あたりpx
+  const w = Math.max(10, (tick/T)*unit);
+  const col = opt.color||'var(--bar-fill)';
+  return `<div class="durbar" style="width:${w}px;background:${col}"></div>`;
+}
+
+/* ---------- Web Audio クリック ---------- */
+let AC=null;
+function audio(){
+  if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ AC=null; } }
+  if(AC && AC.state==='suspended'){ AC.resume(); }
+  return AC;
+}
+// kind:'count' … カウントイン用の低くこもった音（メトロノームの木の音に近い）
+// kind:'note'  … 問題のリズム用の高く明るい音
+// 同じ音だと「どこからが問題か」が分からなくなるため、必ず音色を変える。
+function click(time, accent, kind){
+  const ac=audio(); if(!ac) return;
+  const isCount = kind==='count';
+  const len = isCount?0.05:0.03, sr=ac.sampleRate, buf=ac.createBuffer(1,Math.round(sr*len),sr);
+  const data=buf.getChannelData(0);
+  const decay = isCount?10:6;
+  for(let i=0;i<data.length;i++){ data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,decay); }
+  const src=ac.createBufferSource(); src.buffer=buf;
+  const flt=ac.createBiquadFilter(); flt.type='bandpass';
+  flt.frequency.value = isCount ? (accent?1100:820) : (accent?2600:1800);
+  flt.Q.value = isCount ? 1.8 : 0.9;
+  const g=ac.createGain(); g.gain.value = isCount ? (accent?0.55:0.4) : (accent?0.95:0.6);
+  src.connect(flt); flt.connect(g); g.connect(ac.destination);
+  src.start(time);
+}
+// tickシーケンスをテンポで再生
+let playTimer=null;
+function playSequence(seq, bpm, opt={}){
+  const ac=audio(); if(!ac){ opt.onEnd&&opt.onEnd(); return; }
+  const spb=60/bpm;                 // 1拍秒
+  const lead=0.12;
+  const countBeats = opt.countIn||0;  // カウントイン拍数（0なら無し）
+  const cUnit = opt.countUnitTick || T;   // カウント1つぶんのtick（6/8は付点四分＝72）
+  const cspb = spb*(cUnit/T);
+  const countSec = countBeats*cspb;
+  const t0=ac.currentTime+lead+countSec;   // 本編の開始時刻（カウント後）
+  // --- カウントイン：各拍でクリック音＋数字コールバック ---
+  // 最後の1拍はわざと鳴らさない。拍は流れたまま「間」ができ、問題の頭がはっきり立つ。
+  if(countBeats>0){
+    const silentLast = countBeats>=3;
+    for(let b=0;b<countBeats;b++){
+      const ct=ac.currentTime+lead+b*cspb;
+      if(!(silentLast && b===countBeats-1)) click(ct, b===0, 'count');  // 頭拍だけアクセント
+      if(opt.onCount){
+        const remain=countBeats-b;           // 「4・3・2・1」と減っていく数字
+        const delayMs=(ct-ac.currentTime)*1000;
+        setTimeout(()=>opt.onCount(remain, false), Math.max(0,delayMs));
+      }
+    }
+    // カウント終了＝本編開始の合図（「スタート！」用）
+    if(opt.onCount){
+      const delayMs=(t0-ac.currentTime)*1000;
+      setTimeout(()=>opt.onCount(0, true), Math.max(0,delayMs));
+    }
+  }
+  let acc=0;
+  const events=[];
+  seq.forEach((n,i)=>{
+    // n は文字列キー（'quarter'等）またはオブジェクト（{key,tick,rest}）の両方を許容
+    const d = (typeof n==='string') ? DUR[n] : (DUR[n.key]||null);
+    const tick = (typeof n==='object' && n.tick!=null) ? n.tick : (d?d.tick:T);
+    const isRest = (typeof n==='object') && n.rest;
+    const onsetT = t0+(acc/T)*spb;
+    if(!isRest) events.push({t:onsetT, accent:i===0});
+    // 各音符・休符の頭で、いま鳴っている位置を通知（ハイライト用）
+    if(opt.onStep){ const delayMs=(onsetT-ac.currentTime)*1000; setTimeout(()=>opt.onStep(i), Math.max(0,delayMs)); }
+    acc+=tick;
+  });
+  events.forEach(e=>click(e.t, e.accent&&opt.accentFirst, 'note'));
+  const totalSec=(acc/T)*spb;
+  clearTimeout(playTimer);
+  playTimer=setTimeout(()=>{ opt.onEnd&&opt.onEnd(); }, (lead+countSec+totalSec+0.15)*1000);
+}
+
+// 譜面を鳴らしつつ、再生位置を示す縦バー（プレイヘッド）をなめらかに滑らせ、
+// 通過する音符もハイライトする。container 内の .stage svg すべてにバーを乗せる（2段対応）。
+function playStaffBar(seq, bpm, container, onDone){
+  const SVGNS='http://www.w3.org/2000/svg';
+  const spb=60/bpm, lead=0.12;
+  const totalTick=seq.reduce((s,n)=>s+(n.tick||(DUR[n.key]||{tick:48}).tick),0);
+  const total=(totalTick/T)*spb;
+  const clearHL=()=>container.querySelectorAll('.snote.hl').forEach(e=>e.classList.remove('hl'));
+  // 各段：再生時刻→x座標 の区分線形の点列と、バー線を用意
+  const bars=Array.from(container.querySelectorAll('.stage svg')).map(svg=>{
+    const vb=(svg.getAttribute('viewBox')||'0 0 300 86').split(' ').map(Number);
+    const pts=[]; let acc=0;
+    seq.forEach((n,i)=>{
+      const tick=n.tick||(DUR[n.key]||{tick:48}).tick;
+      const el=svg.querySelector(`.snote[data-src="${i}"]`);
+      const x=el?parseFloat(el.getAttribute('data-cx')):null;
+      pts.push({t:(acc/T)*spb, x}); acc+=tick;
+    });
+    pts.push({t:(acc/T)*spb, x:vb[2]-16});   // 譜面右端
+    for(let k=0;k<pts.length;k++){ if(pts[k].x==null) pts[k].x=(k>0?pts[k-1].x:vb[0]+20); }
+    const line=document.createElementNS(SVGNS,'line');
+    line.setAttribute('y1','7'); line.setAttribute('y2',String(vb[3]-7));
+    line.setAttribute('stroke','var(--accent)'); line.setAttribute('stroke-width','2.4');
+    line.setAttribute('stroke-linecap','round'); line.setAttribute('opacity','0.6');
+    line.setAttribute('x1',String(pts[0].x)); line.setAttribute('x2',String(pts[0].x));
+    svg.appendChild(line);
+    return {line, pts};
+  });
+  const xAt=(pts,t)=>{ if(t<=pts[0].t) return pts[0].x;
+    for(let k=0;k<pts.length-1;k++){ if(t<=pts[k+1].t){ const a=pts[k],b=pts[k+1],r=(t-a.t)/((b.t-a.t)||1); return a.x+(b.x-a.x)*r; } }
+    return pts[pts.length-1].x; };
+  let raf=null, startT=(window.performance&&performance.now?performance.now():Date.now()), done=false;
+  const finish=()=>{ if(done) return; done=true; if(raf) cancelAnimationFrame(raf);
+    bars.forEach(b=>{ if(b.line.parentNode) b.line.parentNode.removeChild(b.line); }); clearHL(); onDone&&onDone(); };
+  const now=()=>(window.performance&&performance.now?performance.now():Date.now());
+  const animate=()=>{ const el=(now()-startT)/1000 - lead; const tt=Math.max(0,el);
+    bars.forEach(b=>{ const x=xAt(b.pts,tt); b.line.setAttribute('x1',String(x)); b.line.setAttribute('x2',String(x)); });
+    if(el<total+0.15) raf=requestAnimationFrame(animate); };
+  raf=requestAnimationFrame(animate);
+  playSequence(seq, bpm, {
+    accentFirst:true,
+    onStep:(i)=>{ clearHL(); container.querySelectorAll(`.snote[data-src="${i}"]`).forEach(e=>e.classList.add('hl')); },
+    onEnd:finish
+  });
+}
+
+/* ---------- 汎用ユーティリティ ---------- */
+const rnd = arr => arr[Math.floor(Math.random()*arr.length)];
+const shuffle = a => { a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+
+// 指定tick合計になる音符列をランダム生成（バックトラック）
+function fillBar(targetTick, pool){
+  const keys = pool || ['whole','half','dotHalf','quarter','dotQuarter','eighth','dotEighth','sixteenth'];
+  const items = keys.map(k=>({k,tick:DUR[k].tick})).sort((a,b)=>b.tick-a.tick);
+  const out=[];
+  function bt(rem){
+    if(rem===0) return true;
+    for(const it of shuffle(items)){
+      if(it.tick<=rem){ out.push(it.k); if(bt(rem-it.tick)) return true; out.pop(); }
+    }
+    return false;
+  }
+  bt(targetTick);
+  return out;
+}
+
+// 拍子に合った1小節を生成する。
+// 複合拍子(6/8)は「八分3つ＝1拍」のまとまりごとに埋め、拍のまとまりが崩れないようにする。
+function fillBarSig(sig, pool){
+  if(!isCompound(sig)) return fillBar(barTickOf(sig), pool);
+  const unit = pulseTickOf(sig);                       // 72tick＝付点四分
+  const usable = pool.filter(k=>DUR[k].tick<=unit);
+  const use = usable.length ? usable : ['eighth','quarter','dotQuarter'];
+  let out=[];
+  for(let i=0;i<pulseCountOf(sig);i++){
+    let g=fillBar(unit, use);
+    if(!g.length) g=['dotQuarter'];
+    out=out.concat(g);
+  }
+  return out;
+}
+
+/* ---- 直前の問題との重複回避 ----
+   各モードのキー(mode番号など)ごとに直前の「署名」を覚えておき、
+   gen() が同じ署名を返すあいだは作り直す（最大tries回）。 */
+const _lastSig = {};
+function uniqueGen(tag, gen, sig, tries=12){
+  let result = gen();
+  for(let i=0; i<tries && sig(result)===_lastSig[tag]; i++){
+    result = gen();
+  }
+  _lastSig[tag] = sig(result);
+  return result;
+}
+
+/* ============================================================
+   状態
+============================================================ */
+const S={mode:8, lastPrac:0, score:0, total:0, streak:0, best:0, locked:false, diff:'normal', meter:'auto',
+         data:null};   // 起動直後はホーム（HOME_MODE）
+
+/* ============================================================
+   ★ 全モード共通セッション（チャレンジ型・問数固定）
+   ・1セッション＝5問（③リズム耳コピのみ4問）
+   ・採点は正解数のみ／星は辛め：★3=満点 ★2=−1問 ★1=−2問
+   ・難易度は選択＋微調整（2連続正解→+1段 / 2連続ミス→−1段）
+============================================================ */
+const DIFFS=['easy','normal','hard'];
+const DIFF_LABEL={easy:'やさしい',normal:'ふつう',hard:'むずかしい'};
+const BEST_KEY='nvt_session_best_v1';
+let bestStars=(function(){ try{ return JSON.parse(localStorage.getItem(BEST_KEY)||'{}')||{}; }catch(e){ return {}; } })();
+function saveBest(modeIdx, stars){
+  const prev=bestStars[modeIdx]||0;
+  if(stars>prev){ bestStars[modeIdx]=stars; try{ localStorage.setItem(BEST_KEY, JSON.stringify(bestStars)); }catch(e){} }
+}
+// セッション問数：①穴埋め=10問（デイリー）、③リズム耳コピ=4問、他5問
+function sessionN(modeIdx){ return (MODES[modeIdx] && MODES[modeIdx].n) || 5; }
+let SESS=null;
+
+/* ============================================================
+   ★ ①穴埋め＝デイリー（毎日1回・10問・表記なしで自動難化）
+============================================================ */
+// デイリーは複数モードで併用（穴埋め=fill／音価あて=value／名前あて=name）。モードごとに独立した状態を持つ。
+const DAILY_KEYS={ fill:'nvt_fill_daily_v1', value:'nvt_value_daily_v1', name:'nvt_name_daily_v1', advanced:'nvt_advanced_daily_v1', listen:'nvt_listen_daily_v1', scale:'nvt_scale_daily_v1', police:'nvt_police_daily_v1' };
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function yesterdayStr(){ const d=new Date(); d.setDate(d.getDate()-1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function loadDaily(id){ try{ return JSON.parse(localStorage.getItem(DAILY_KEYS[id])||'{}')||{}; }catch(e){ return {}; } }
+const DAILIES={}; for(const _id in DAILY_KEYS) DAILIES[_id]=loadDaily(_id);
+function saveDaily(id){ try{ localStorage.setItem(DAILY_KEYS[id], JSON.stringify(DAILIES[id])); }catch(e){} }
+// 今日の状態： 'done'（本日達成済み） / 'inprogress'（途中） / 'fresh'（未着手 or 新しい日）
+function dailyState(id){
+  const D=DAILIES[id]||{}, t=todayStr();
+  if(D.date!==t) return 'fresh';
+  if(D.done) return 'done';
+  if(D.progress) return 'inprogress';
+  return 'fresh';
+}
+function dailyBegin(id){ const D=DAILIES[id]; D.date=todayStr(); D.done=false; D.progress={i:0,correct:0,hist:[]}; saveDaily(id); }
+function dailySaveProgress(){ if(!SESS||!SESS.daily) return; const D=DAILIES[SESS.dailyId]; if(!D) return; D.date=todayStr(); D.progress={i:SESS.i,correct:SESS.correct,hist:(SESS._hist||[]).slice()}; saveDaily(SESS.dailyId); }
+function dailyComplete(id, correct, N, stars){
+  const D=DAILIES[id], t=todayStr(), y=yesterdayStr();
+  let streak = D.streak||0;
+  if(D.lastDone===t){ /* 念のため二重加算防止 */ }
+  else if(D.lastDone===y){ streak = streak+1; }
+  else { streak = 1; }
+  D.date=t; D.done=true; D.lastDone=t; D.streak=streak;
+  D.correct=correct; D.N=N; D.stars=stars;
+  if(!D.best || stars>D.best) D.best=stars;
+  D.progress=null; saveDaily(id);
+  return streak;
+}
+// 本日のデイリーを再挑戦（完了フラグ・途中経過のみ解除。連続日数・自己ベストは維持）。
+// 再度クリアすると本日のスコア（正解数・星）は上書きされ、streakは二重加算されない。
+function dailyRetry(id){
+  const D=DAILIES[id]; D.done=false; D.progress=null; saveDaily(id);
+  sessionStart();   // dailyState'fresh'→dailyBegin＋新セッション
+  loadMode();
+}
+// 問番号(0-based)→出題ステージ（表記なしで静かに難化）
+function fillStage(i){
+  if(i<=2)  return {pool:['whole','half','quarter','eighth'], sig:[4,4], allowWhole:true};   // 序盤：素直な音価・4/4（全音符はここだけ・少しだけ）
+  if(i<=6)  return {pool:['half','dotHalf','quarter','quarter','eighth','eighth'], sig:[4,4], allowWhole:false}; // 中盤：付点二分など・4/4
+  // 終盤：付点四分/八分・十六分＋拍子変化（6/8が有効なら複合拍子も混ざる）
+  return {pool:['half','dotHalf','quarter','dotQuarter','eighth','eighth','dotEighth','sixteenth'], sig:rnd(SIG_ALL()), allowWhole:false};
+}
+
+function sessionStart(){
+  const M=MODES[S.mode];
+  if(M && M.ref){ SESS=null; return; }
+  const did = M && M.daily;   // このモードのデイリーid（無ければ通常セッション）
+  if(did){
+    const N = M.n||10;
+    const st=dailyState(did);
+    if(st==='done'){ SESS={active:false, mode:S.mode, N, i:0, correct:0, done:true, daily:true, dailyId:did, todayDone:true}; return; }
+    if(st==='inprogress'){
+      const p=DAILIES[did].progress||{i:0,correct:0,hist:[]};
+      SESS={active:true, mode:S.mode, N, i:p.i||0, correct:p.correct||0, answered:false, done:false, cc:0, wc:0, _hist:(p.hist||[]).slice(), _last:false, daily:true, dailyId:did, _wholeAns:0};
+      return;
+    }
+    dailyBegin(did);
+    SESS={active:true, mode:S.mode, N, i:0, correct:0, answered:false, done:false, cc:0, wc:0, _hist:[], _last:false, daily:true, dailyId:did, _wholeAns:0};
+    return;
+  }
+  SESS={active:true, mode:S.mode, N:sessionN(S.mode), i:0, correct:0, answered:false, done:false, cc:0, wc:0, _hist:[], _last:false};
+}
+// 難易度の微調整（±1段、範囲内でクランプ）
+function bumpDiff(dir){
+  const idx=DIFFS.indexOf(S.diff);
+  const ni=Math.max(0, Math.min(DIFFS.length-1, idx+dir));
+  if(ni!==idx){ S.diff=DIFFS[ni]; return true; }
+  return false;
+}
+// 星判定（辛め）：満点=3／−1問=2／−2問=1／それ未満=0
+function starsFor(correct, N){
+  if(correct>=N) return 3;
+  if(correct>=N-1) return 2;
+  if(correct>=N-2) return 1;
+  return 0;
+}
+// 回答直後に呼ばれ、セッションを進める（score から呼び出し）
+function sessionRecord(ok){
+  if(!SESS || !SESS.active || SESS.answered) return;
+  SESS.answered=true;
+  SESS._last=ok; SESS._hist[SESS.i]=ok;
+  if(ok){ SESS.correct++; SESS.cc++; SESS.wc=0; } else { SESS.cc=0; SESS.wc++; }
+  // 微調整（穴埋めデイリーでは行わない：難化は問番号カーブが担う）。他モードは2連続で±1段。
+  let diffCh=null;
+  if(!SESS.daily){
+    if(SESS.cc>=2){ const from=S.diff; if(bumpDiff(+1)) diffCh={dir:1,from,to:S.diff}; SESS.cc=0; }
+    else if(SESS.wc>=2){ const from=S.diff; if(bumpDiff(-1)) diffCh={dir:-1,from,to:S.diff}; SESS.wc=0; }
+  }
+  // 本番は連続正解をコンボとして積み上げるため、cc をリセットしない
+  renderSessBar();
+  birdReact(ok);
+  if(diffCh) announceDiff(diffCh);
+  renderSessionNext();
+}
+// 難易度が変わったことを、はっきり知らせる（トースト＋ラベル点滅＋ことりの声＋セレクタ反映）
+function announceDiff(ch){
+  const up = ch.dir>0;
+  // ことりの吹き出しを上書き（ok/ng より難易度変化を優先）
+  setBubble(up?`レベルアップ！むずかしくなるよ⤴`:`むずかしさを さげたよ⤵`, up?'ok':'ng');
+  // セッションバーの難易度ラベルを点滅
+  const lab=document.querySelector('.sess-diff'); if(lab){ lab.classList.remove('flash'); void lab.offsetWidth; lab.classList.add('flash'); }
+  // 難易度セレクタの選択状態を即時反映
+  const seg=hudR.querySelector('.seg');
+  if(seg){ [...seg.children].forEach(btn=>btn.setAttribute('aria-pressed', btn.textContent===DIFF_LABEL[S.diff]?'true':'false')); }
+  // カード上部にトースト表示
+  const card=$('stageCard'); if(card){
+    const old=card.querySelector('.difftoast'); if(old) old.remove();
+    const t=document.createElement('div'); t.className='difftoast '+(up?'up':'down');
+    t.innerHTML=`<span class="dt-ico">${up?'⤴':'⤵'}</span><span>むずかしさ <b>${DIFF_LABEL[ch.from]}</b> → <b>${DIFF_LABEL[ch.to]}</b></span>`;
+    card.appendChild(t);
+    requestAnimationFrame(()=>t.classList.add('show'));
+    setTimeout(()=>t.classList.remove('show'), 2200);
+    setTimeout(()=>{ if(t.parentNode) t.remove(); }, 2700);
+  }
+}
+// 進行ボタン：つぎの問題／結果を見る
+function renderSessionNext(){
+  ctrlEl.innerHTML='';
+  ctrlEl.classList.add('afteranswer');   // 結果・理由を読んだあとに、少し遅れて現れる
+  if(!SESS || !SESS.active){
+    const n=mkBtn('つぎの問題 →','',()=>loadMode()); n.classList.add('wide'); ctrlEl.appendChild(n); return;
+  }
+  if(SESS.i < SESS.N-1){
+    const b=mkBtn('つぎの問題 →','',()=>{ SESS.i++; SESS.answered=false; if(SESS.daily) dailySaveProgress(); loadMode(); });
+    b.classList.add('wide'); ctrlEl.appendChild(b);
+  }else{
+    const b=mkBtn('結果を見る ★','accent',()=>sessionFinish());
+    b.classList.add('wide'); ctrlEl.appendChild(b);
+  }
+}
+// セッション集計→星→記録→オーバーレイ
+function sessionFinish(){
+  if(!SESS) return;
+  const c=SESS.correct, N=SESS.N, stars=starsFor(c,N);
+  SESS.done=true; SESS.active=false;
+  applyTabState();
+  if(stars>0) saveBest(SESS.mode, stars);
+  if(SESS.daily){ dailyComplete(SESS.dailyId, c, N, stars); SESS.todayDone=true; buildTabs(); }
+  birdFinish(stars);
+  showSessionResult(SESS.mode, c, N, stars);
+}
+// 進捗バー（旧レベルパネル枠 #levelPanel を流用）
+function renderSessBar(){
+  const host=$('levelPanel'); if(!host) return;
+  if(!SESS || !SESS.active){ host.innerHTML=''; return; }
+  const cur = SESS.answered ? SESS.i : SESS.i;   // 現在問（0-based）
+  let dots='';
+  for(let k=0;k<SESS.N;k++){
+    let cls='d';
+    if(k<SESS.i) cls+= (SESS._hist&&SESS._hist[k]===false)?' ng':' ok';
+    else if(k===SESS.i){ if(SESS.answered) cls+= (SESS._last?' ok':' ng'); else cls+=' now'; }
+    dots+=`<span class="${cls}"></span>`;
+  }
+  if(SESS.dailyId==='advanced'){
+    // 本番：残り問題数とコンボ（連続正解）を前に出す
+    const remain = SESS.N - (SESS.answered ? SESS.i+1 : SESS.i);
+    const combo = SESS.cc||0;
+    host.innerHTML=
+      `<div class="sessbar">
+         <span class="qn"><span class="honban-tag">本番</span>第 <b>${Math.min(SESS.i+1,SESS.N)}</b> / ${SESS.N}</span>
+         <span class="sess-dots">${dots}</span>
+         <span class="remain">のこり <b>${Math.max(remain,0)}</b>問</span>
+       </div>
+       <div class="sessbar" style="margin-top:-6px;justify-content:center">
+         <span class="combo${combo>=2?' on':''}" id="comboBox">${combo>=2?`🔥 <span class="cn">${combo}</span> れんぞく せいかい！`:'れんぞく せいかいで コンボ'}</span>
+       </div>`;
+    if(combo>=2){ const cb=$('comboBox'); if(cb){ void cb.offsetWidth; cb.classList.add('pop'); } }
+    return;
+  }
+  host.innerHTML=
+    SESS.daily
+    ? `<div class="sessbar">
+         <span class="qn">きょうの10問　第 <b>${Math.min(SESS.i+1,SESS.N)}</b> / ${SESS.N}</span>
+         <span class="sess-dots">${dots}</span>
+         <span class="sess-diff">🔥 <b>${(DAILIES[SESS.dailyId]||{}).streak||0}</b>日</span>
+       </div>`
+    : `<div class="sessbar">
+         <span class="qn">第 <b>${Math.min(SESS.i+1,SESS.N)}</b> / ${SESS.N} 問</span>
+         <span class="sess-dots">${dots}</span>
+         <span class="sess-diff">むずかしさ <b>${DIFF_LABEL[S.diff]}</b></span>
+       </div>`;
+}
+/* ---- ことり二羽の反応 ---- */
+function setBubble(txt, cls){
+  const b=$('birdBubble'), t=$('bubbleTxt'); if(!b||!t) return;
+  t.textContent=txt;
+  b.className='bubble'+(cls?(' '+cls):'');
+  void b.offsetWidth; b.classList.add('pop');
+}
+const BUBBLE_DEFAULT='いっしょに 練習しよう！';
+function resetBubble(){ const b=$('birdBubble'), t=$('bubbleTxt'); if(t) t.textContent=BUBBLE_DEFAULT; if(b) b.className='bubble'; }
+function birdReact(ok){
+  const g=$('birdGreen'), w=$('birdWhite'), cls=ok?'happy':'oops';
+  [g,w].forEach(el=>{ if(!el)return; el.classList.remove('happy','oops'); void el.offsetWidth; el.classList.add(cls); });
+  const okMsgs=['いいね！','その ちょうし！','せいかい！','じょうずだね！'];
+  const ngMsgs=['おしい！','つぎは いけるよ','ドンマイ！','よく きいてみよう'];
+  setBubble(ok?rnd(okMsgs):rnd(ngMsgs), ok?'ok':'ng');
+}
+function birdFinish(stars){
+  const g=$('birdGreen'), w=$('birdWhite');
+  [g,w].forEach(el=>{ if(!el)return; el.classList.remove('happy','oops'); void el.offsetWidth; if(stars>0) el.classList.add('happy'); });
+  const msg = stars>=3?'ぜんもん せいかい！やったね！'
+    : stars===2?'あと ちょっと！おしい！'
+    : stars===1?'クリア！つぎも がんばろう'
+    : 'もういちど チャレンジ！';
+  setBubble(msg, stars>0?'ok':'ng');
+}
+/* ---- セッション結果オーバーレイ（fcOverlay を流用） ---- */
+function showSessionResult(mode, c, N, stars){
+  const ov=$('fcOverlay'); if(!ov) return;
+  $('fcStars').textContent = '★'.repeat(stars)+'☆'.repeat(3-stars);
+  const isDaily = !!(MODES[mode] && MODES[mode].daily);
+  let icon,title,sub;
+  if(isDaily){
+    if(stars===3){ icon='🌟'; title='きょうも かんぺき！'; sub='ぜんもん せいかい、みごとです'; }
+    else if(stars>=1){ icon='🎵'; title='きょうも おつかれさま！'; sub='まいにち つづけるのが いちばん'; }
+    else { icon='🌱'; title='きょうも よくがんばった'; sub='つづけるほど 上手になります'; }
+  }else{
+    if(stars===3){ icon='🌟'; title='かんぺき！'; sub='ぜんもん せいかい、みごとです'; }
+    else if(stars===2){ icon='🎵'; title='あと一歩！'; sub='ほぼ かんぺきでした'; }
+    else if(stars===1){ icon='🎶'; title='クリア！'; sub='その ちょうしです'; }
+    else { icon='🌱'; title='もう少し'; sub='くり返せば きっと できます'; }
+  }
+  $('fcIcon').textContent=icon;
+  $('fcTitle').textContent=title;
+  $('fcSub').textContent=sub;
+  const modeName = MODES[mode]?MODES[mode].label:'';
+  if(isDaily){
+    const streak=(DAILIES[MODES[mode].daily]||{}).streak||0;
+    $('fcScore').innerHTML=`きょうの10問　${N}問中 <b>${c}</b>問 せいかい`+
+      `<br><span style="font-size:16px;color:var(--accent-deep);font-weight:800">🔥 ${streak}日 つづいています</span>`+
+      `<br><span style="font-size:12px;color:var(--muted)">また あした、あたらしい10問を ようい します</span>`;
+  }else{
+    const best = bestStars[mode]||0;
+    $('fcScore').innerHTML=`${modeName}　${N}問中 <b>${c}</b>問 せいかい`+
+      (best>0?`<br><span style="font-size:12px;color:var(--muted)">これまでの さいこう：${'★'.repeat(best)}${'☆'.repeat(3-best)}</span>`:'');
+  }
+  ov.classList.add('on');
+  if(stars>0) fcConfetti();
+}
+// 結果オーバーレイの紙ふぶき
+function fcConfetti(){
+  const cv=document.getElementById('fcConfetti'); if(!cv) return;
+  const ctx=cv.getContext('2d'); const W=cv.width=innerWidth, H=cv.height=innerHeight;
+  const cols=['#EF9F27','#BA7517','#1D9E75','#185FA5','#FFD54F'];
+  const ps=[];
+  for(let i=0;i<90;i++) ps.push({x:Math.random()*W,y:-20-Math.random()*H*0.3,
+    vx:(Math.random()-0.5)*2,vy:2+Math.random()*3,w:6+Math.random()*6,h:8+Math.random()*8,
+    col:cols[i%cols.length],rot:Math.random()*6,vr:(Math.random()-0.5)*0.3});
+  const dur=1600, t0=performance.now();
+  (function loop(now){
+    const el=now-t0; ctx.clearRect(0,0,W,H);
+    ps.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha=Math.max(0,1-el/dur); ctx.fillStyle=p.col;
+      ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h); ctx.restore(); });
+    if(el<dur) requestAnimationFrame(loop); else ctx.clearRect(0,0,W,H);
+  })(t0);
+}
+// 結果オーバーレイの「もう一度」「とじる」。どちらも新しいセッションを始めて閉じる。
+// （デイリーが本日ぶん終了している場合は、sessionStart→loadMode で「また あした」画面に戻る）
+function closeResultOverlay(){
+  const ov=document.getElementById('fcOverlay'); if(ov) ov.classList.remove('on');
+  sessionStart();
+  loadMode();
+}
+document.getElementById('fcRetry').addEventListener('click', closeResultOverlay);
+document.getElementById('fcClose').addEventListener('click', closeResultOverlay);
+
+const $ = id => document.getElementById(id);
+const bodyEl=$('body'), promptEl=$('prompt'), fbEl=$('fb'), ctrlEl=$('controls'), hudR=$('hudRight');
+
+function updHUD(){ $('hScore').textContent=S.score; $('hTotal').textContent=S.total; $('hStreak').textContent=S.streak; }
+function showFB(ok, msg, exp){
+  fbEl.className='fb show '+(ok?'ok':'ng');
+  // 「結果 → 理由」の順に読ませる。つぎへのボタンは renderSessionNext が理由の下に置く。
+  const verdict = ok?'◎ せいかい！':'✕ おしい！';
+  const reason = [msg, exp].filter(Boolean).join('　');
+  fbEl.innerHTML=`<span class="verdict">${verdict}</span>`+(reason?`<span class="reason">${reason}</span>`:'');
+}
+function clearFB(){ fbEl.className='fb'; fbEl.innerHTML=''; }
+function score(ok){
+  S.total++; if(ok){S.score++;S.streak++; if(S.streak>S.best)S.best=S.streak;} else S.streak=0;
+  updHUD();
+  sessionRecord(ok);   // ★ 全モード共通：セッションを進める
+}
+
+/* ============================================================
+   モード定義
+============================================================ */
+const MODES=[
+  {no:'①',icon:'✏️',label:'穴うめ',    fn:mFill,   daily:'fill',  n:10},
+  {no:'②',icon:'📏',label:'ながさ当て',fn:()=>mNoteQuiz('value'), daily:'value', n:6},
+  {no:'③',icon:'🏷️',label:'なまえ当て',fn:()=>mNoteQuiz('name'),  daily:'name',  n:6},
+  {no:'④',icon:'👂',label:'耳コピ',    fn:mListen, daily:'listen', n:4},
+  {no:'⑤',icon:'⚖️',label:'音価てんびん',fn:mScale, daily:'scale', n:5},
+  {no:'⑥',icon:'🚨',label:'小節けいさつ',fn:mPolice, daily:'police', n:5},
+  {no:'⑦',icon:'💪',label:'腕だめし',  fn:mMixed, daily:'advanced', n:10},
+  {no:'⑧',icon:'📖',label:'解説',fn:mReference, ref:true},
+  {no:'🏠',icon:'🏠',label:'ホーム',  fn:mHome, ref:true},
+];
+const HOME_MODE = 8;   // MODES 上のホームの位置
+
+// ===== 上位区分（本番／練習／解説）＝S.modeから導出 =====
+const SECTIONS=[
+  {id:'home', label:'ホーム',    modes:[8]},
+  {id:'main', label:'本番',      modes:[6]},
+  {id:'prac', label:'練習',     modes:[0,1,2,3,4,5]},
+  {id:'ref',  label:'解説',     modes:[7]},
+];
+function sectionOf(mi){ return mi===8?'home' : mi===6?'main' : mi===7?'ref' : 'prac'; }
+function switchSection(id){
+  if(id==='home') S.mode=HOME_MODE;
+  else if(id==='main') S.mode=6;
+  else if(id==='ref') S.mode=7;
+  else S.mode=(S.lastPrac!=null?S.lastPrac:0);
+  sessionStart(); buildTabs(); loadMode();
+}
+// モードへ直接入る（ホームの各ボタンから使う）
+function gotoMode(mi){
+  S.mode=mi;
+  if(mi<=5) S.lastPrac=mi;
+  tabsOpen=false;
+  sessionStart(); buildTabs(); loadMode();
+}
+// 上級デイリー：全モード混在。上級難易度の共通プールと、モード選択・出題振り分け。
+const ADV_POOL=['half','dotHalf','quarter','dotQuarter','eighth','eighth','dotEighth','sixteenth'];
+const MIX_MODES=['fill','value','name','listen','police'];
+function isMixedDaily(){ return !!(SESS && SESS.dailyId==='advanced'); }
+function buildMixPlan(N){ const plan=[]; while(plan.length<N){ plan.push(...shuffle(MIX_MODES.slice())); } return plan.slice(0,N); }
+// 本番の開始カウントダウン（3→2→1→スタート！）。1セッションにつき1回だけ。
+function honbanCountdown(){
+  if(!SESS || SESS.dailyId!=='advanced' || SESS.i!==0 || SESS._counted) return;
+  SESS._counted=true;
+  const card=$('stageCard'); if(!card) return;
+  const ov=document.createElement('div'); ov.className='countin';
+  const num=document.createElement('div'); num.className='cnum'; ov.appendChild(num);
+  card.appendChild(ov);
+  let n=3;
+  (function step(){
+    if(n>0){
+      num.className='cnum'; num.textContent=String(n);
+      void num.offsetWidth; num.classList.add('beat');
+      n--; setTimeout(step, 620);
+    }else{
+      num.className='cgo'; num.textContent='スタート！';
+      setTimeout(()=>{ if(ov.parentNode) ov.remove(); }, 620);
+    }
+  })();
+}
+function mMixed(){
+  if(SESS && SESS.todayDone){ renderDailyDone(SESS.dailyId); return; }
+  if(SESS && SESS.daily && !SESS.mixPlan) SESS.mixPlan=buildMixPlan(SESS.N||10);
+  const mode = (SESS && SESS.mixPlan && SESS.mixPlan[SESS.i]) || 'fill';
+  ({ fill:mFill, value:()=>mNoteQuiz('value'), name:()=>mNoteQuiz('name'), listen:mListen, police:mPolice }[mode])();
+  honbanCountdown();
+}
+
+let tabsOpen=false;
+// 画面の状態を body のクラスで表す（CSSはこれを見て見た目を切り替える）
+function applyScreenState(){
+  const quiz = !!(SESS && SESS.active);
+  document.body.classList.toggle('quiz', quiz);
+  document.body.classList.toggle('home', S.mode===HOME_MODE);
+  document.body.classList.toggle('honban', !!(SESS && SESS.dailyId==='advanced'));
+}
+function applyTabState(){
+  applyScreenState();
+  const w=$('tabwrap'); if(!w) return;
+  w.classList.toggle('collapsed', !tabsOpen);
+  w.classList.toggle('quiz-active', !!(SESS && SESS.active));
+  const t=$('tabToggle'); if(t) t.setAttribute('aria-expanded', tabsOpen?'true':'false');
+}
+function buildTabs(){
+  resetBubble();
+  const curSec=sectionOf(S.mode);
+  const isDone = mi => { const m=MODES[mi]; return !!(m && m.daily && dailyState(m.daily)==='done'); };
+  const clr = '<span class="clr">✓</span>';
+  // --- 上位区分タブ（本番／練習／解説）---
+  const secNav=$('sections'); secNav.innerHTML='';
+  SECTIONS.forEach(sec=>{
+    const b=document.createElement('button');
+    b.setAttribute('role','tab');
+    b.className='sec'+(sec.id==='main'?' sec-main':'');
+    b.setAttribute('aria-selected', sec.id===curSec?'true':'false');
+    const secDone = (sec.id==='main') && isDone(sec.modes[0]);
+    b.innerHTML=`<span class="sec-label">${sec.label}</span>`+(secDone?'<span class="clr sec-clr">✓</span>':'');
+    b.onclick=()=>{ tabsOpen=false; switchSection(sec.id); };
+    secNav.appendChild(b);
+  });
+  // --- 下位モードタブ（練習区分のときだけ6枠グリッド）---
+  const nav=$('modes'); nav.innerHTML='';
+  if(curSec==='prac'){
+    nav.classList.remove('hidden');
+    SECTIONS.find(s=>s.id==='prac').modes.forEach(i=>{
+      const m=MODES[i];
+      const b=document.createElement('button');
+      b.setAttribute('role','tab');
+      b.setAttribute('aria-selected', i===S.mode?'true':'false');
+      b.innerHTML=`<span class="ico">${m.icon||''}${isDone(i)?clr:''}</span><span class="lbl">${m.label}</span>`;
+      b.onclick=()=>{ tabsOpen=false; S.mode=i; S.lastPrac=i; sessionStart(); buildTabs(); loadMode(); };
+      nav.appendChild(b);
+    });
+  }else{
+    nav.classList.add('hidden');
+  }
+  applyTabState();
+}
+function loadMode(){
+  S.locked=false; clearFB(); resetBubble(); hudR.innerHTML='';
+  ctrlEl.classList.remove('afteranswer','stack','split');
+  // 祝福・カウントインのオーバーレイ残骸を除去（演出中に切り替えた場合の保険）
+  const card=$('stageCard'); if(card){ card.querySelectorAll('.celebrate,.countin').forEach(c=>c.remove()); }
+  // リファレンスモードではスコアHUD・フィードバック・操作行・出題文を隠す
+  const isRef = !!MODES[S.mode].ref;
+  const hudEl = document.querySelector('#stageCard .hud');
+  if(hudEl) hudEl.classList.toggle('hidden', isRef);
+  fbEl.classList.toggle('hidden', isRef);
+  ctrlEl.classList.toggle('hidden', isRef);
+  promptEl.classList.toggle('hidden', isRef);
+  // 解説モードでは進捗バーの枠を空にする
+  if(isRef){ const lp=$('levelPanel'); if(lp) lp.innerHTML=''; }
+  MODES[S.mode].fn();
+  applyTabState();
+}
+
+/* ---- 難易度セグメント（共通パーツ） ---- */
+function diffSeg(){
+  const box=document.createElement('div'); box.className='seg';
+  [['easy','やさしい'],['normal','ふつう'],['hard','むずかしい']].forEach(([v,l])=>{
+    const b=document.createElement('button');
+    b.textContent=l; b.setAttribute('aria-pressed', S.diff===v?'true':'false');
+    b.onclick=()=>{ S.diff=v; sessionStart(); loadMode(); };  // 難易度変更＝セッション再開
+    box.appendChild(b);
+  });
+  return box;
+}
+
+/* ---- レベル選択ボタン（全モード共通・HUDに置く） ---- */
+/* ---- レベルパネル（画面内常設・ことりノーム風） ---- */
+function poolByDiff(){
+  if(S.diff==='easy') return ['whole','half','quarter','eighth'];
+  if(S.diff==='hard') return ['whole','half','dotHalf','quarter','dotQuarter','eighth','dotEighth','sixteenth'];
+  return ['whole','half','dotHalf','quarter','quarter','eighth','eighth'];
+}
+// ②音符あて専用：レベルに一切依存しない難易度ベースのプール
+function poolByDiff2(){
+  if(S.diff==='easy') return ['whole','half','quarter','eighth'];
+  if(S.diff==='hard') return ['whole','half','dotHalf','quarter','dotQuarter','eighth','dotEighth','sixteenth'];
+  return ['whole','half','dotHalf','quarter','quarter','eighth','eighth'];
+}
+/* ---- 拍子セグメント（③リズム耳コピ用） ---- */
+function meterSeg(){
+  const box=document.createElement('div'); box.className='seg';
+  box.style.marginLeft='6px';
+  const _items=[['auto','おまかせ'],['2/4','2/4'],['3/4','3/4'],['4/4','4/4']];
+  if(ENABLE_68) _items.push(['6/8','6/8']);
+  _items.forEach(([v,l])=>{
+    const b=document.createElement('button');
+    b.textContent=l; b.setAttribute('aria-pressed', S.meter===v?'true':'false');
+    b.onclick=()=>{ S.meter=v; loadMode(); };
+    box.appendChild(b);
+  });
+  return box;
+}
+// 現在の拍子[分子,分母]を返す（拍子セグメント → 難易度既定 の順）
+function sigFromMeter(){
+  if(S.meter==='2/4') return [2,4];
+  if(S.meter==='3/4') return [3,4];
+  if(S.meter==='4/4') return [4,4];
+  if(S.meter==='6/8') return ENABLE_68 ? [6,8] : [4,4];
+  return (S.diff==='easy')?[2,4]:(S.diff==='hard'?[4,4]:[3,4]); // おまかせ時は難易度依存
+}
+// 現在の1小節の「四分音符いくつぶんか」（後方互換のため残す）
+function beatsFromMeter(){ return barTickOf(sigFromMeter())/T; }
+// モード共通ヘッダ：セッション進捗バーと難易度セグメントを描画
+function modeHeader(opt={}){
+  renderSessBar();           // #levelPanel の枠をセッション進捗バーに転用
+  if(!(MODES[S.mode]&&MODES[S.mode].daily)) hudR.appendChild(diffSeg());  // 難易度セレクタ（デイリーは表記なしゆえ出さない）
+}
+
+/* ============================================================
+   ① 穴埋め：小節の空白を埋める音符を当てる
+============================================================ */
+function mFill(){
+  modeHeader();
+  // 本日ぶんを達成済みなら「また明日」画面
+  if(SESS && SESS.todayDone){ renderDailyDone(SESS.dailyId); return; }
+  // 問番号に応じたステージ（表記なしで静かに難化）。練習・デイリーとも同じ進み方。
+  const qi = isMixedDaily() ? 8 : ((SESS && SESS.i!=null) ? SESS.i : 0);   // 上級は難ステージ固定
+  const st = fillStage(qi);
+  const sig = st.sig;
+  const target = barTickOf(sig);
+  const wholeAns = (SESS && SESS._wholeAns) || 0;
+  const q = uniqueGen('fill', ()=>{
+    const arr = fillBarSig(sig, st.pool);
+    const idxAll = arr.map((k,idx)=>idx);
+    const nonWhole = idxAll.filter(idx=>arr[idx]!=='whole');
+    // 答え（空欄）が全音符になるのは序盤のみ・上限1回・かつ低確率
+    const mayWhole = st.allowWhole && wholeAns<1 && Math.random()<0.25;
+    let bi;
+    if(!mayWhole && nonWhole.length){ bi = nonWhole[Math.floor(Math.random()*nonWhole.length)]; }
+    else { bi = idxAll[Math.floor(Math.random()*idxAll.length)]; }
+    return {full:arr, blankIdx:bi};
+  }, r=>r.full.join('-')+'@'+r.blankIdx);
+  const full=q.full, blankIdx=q.blankIdx, answerKey=full[blankIdx];
+  if(answerKey==='whole' && SESS){ SESS._wholeAns=(SESS._wholeAns||0)+1; }
+  const seq = full.map((k,i)=> i===blankIdx ? {key:k,blank:true,tick:DUR[k].tick} : {key:k,tick:DUR[k].tick});
+  renderFill(seq, answerKey, blankIdx, target, sig);
+}
+
+// デイリー達成済み画面（また明日）
+function renderDailyDone(id){
+  hudR.innerHTML=''; const lp=$('levelPanel'); if(lp) lp.innerHTML='';
+  promptEl.innerHTML=''; ctrlEl.innerHTML=''; fbEl.className='fb'; fbEl.innerHTML='';
+  const D=DAILIES[id]||{};
+  const c=D.correct||0, N=D.N||10, stars=D.stars||0, streak=D.streak||0;
+  bodyEl.innerHTML=`<div class="dailydone">
+     <div class="dd-emoji">🌙</div>
+     <div class="dd-title">きょうの${N}問は おしまい！</div>
+     <div class="dd-stars">${'★'.repeat(stars)}${'☆'.repeat(3-stars)}</div>
+     <div class="dd-score">${N}問中 <b>${c}</b>問 せいかい</div>
+     <div class="dd-streak">🔥 <b>${streak}</b>日 つづいています</div>
+     <div class="dd-sub">また あした あそぼうね</div>
+   </div>`;
+  // もう1回 挑戦できるように（スコアは上書き・連続日数はそのまま）
+  const dd = bodyEl.querySelector('.dailydone');
+  if(dd){
+    const rb = mkBtn('もう1回 挑戦する 🔁','',()=>dailyRetry(id));
+    rb.style.marginTop='16px';
+    dd.appendChild(rb);
+    const note=document.createElement('div');
+    note.className='dd-sub';
+    note.style.marginTop='6px';
+    note.textContent='スコアは ぬりかえOK・れんぞく日数は そのまま';
+    dd.appendChild(note);
+  }
+  setBubble('また あした！', 'ok');
+}
+
+// ①穴埋めの描画・採点（共通化）
+function renderFill(seq, answerKey, blankIdx, target, sig){
+  const meterSig = sig || [Math.round(target/T), 4];
+  const tieOK = canTie(meterSig);             // 複合拍子は拍のまとめ方が異なるため分割表示しない
+  promptEl.innerHTML=`<b>「?」の枠</b>に入る音符はどれ？ <span class="toollabel">（${meterSig[0]}/${meterSig[1]}拍子 ＝ ひと小節は${barLenLabel(meterSig)}）</span>`;
+  bodyEl.innerHTML=`<div class="stage">${staffSVG(seq,{totalTick:target,meterSig,beam:false})}</div>`;
+  const others = shuffle(Object.keys(DUR).filter(k=>k!==answerKey)).slice(0,3);
+  const opts = shuffle([answerKey,...others]);
+  renderChoices(opts, answerKey, (k,btn,correct)=>{
+    if(correct){
+      seq[blankIdx]={key:answerKey,tick:DUR[answerKey].tick,mark:'ok'};
+      // 拍でまとめる（分割＋タイ）と見た目が変わる小節だけ、2段で対比（そのまま／まとめた形）
+      const _exp=expandTies(seq, target);
+      const _split=tieOK && ((_exp.length!==seq.length)||_exp.some(n=>n.tie));
+      if(_split){
+        bodyEl.innerHTML=
+          `<div class="stage"><div class="toollabel" style="text-align:center;margin:0 0 2px">そのまま（きみが うめた かたち）</div>`
+          +`${staffSVG(seq,{totalTick:target,meterSig,beam:true})}</div>`
+          +`<div class="stage" style="margin-top:6px"><div class="toollabel" style="text-align:center;margin:0 0 2px">拍で まとめた かたち（ほんとうの 書きかた）</div>`
+          +`${staffSVG(seq,{totalTick:target,meterSig,beam:true,tie:true})}</div>`;
+      }else{
+        bodyEl.innerHTML=`<div class="stage">${staffSVG(seq,{totalTick:target,meterSig,beam:true,tie:tieOK})}</div>`;
+      }
+      // ▶再生：譜面のリズムを鳴らし、再生位置バーをなめらかに滑らせ、通過する音符も光らせる（2段連動）
+      const pbtn=mkBtn('▶ 再生','accent',()=>{
+        pbtn.disabled=true;
+        playStaffBar(seq, 84, bodyEl, ()=>{ pbtn.disabled=false; });
+      });
+      pbtn.style.marginTop='8px';
+      const pwrap=document.createElement('div'); pwrap.style.textAlign='center'; pwrap.appendChild(pbtn);
+      bodyEl.appendChild(pwrap);
+      showFB(true, DUR[answerKey].name, `${beatStr(DUR[answerKey].tick)}で小節が満ちました`);
+    }else{
+      showFB(false, '', `正解は ${DUR[answerKey].name}（${beatStr(DUR[answerKey].tick)}）でした`);
+    }
+  },{withGlyph:true,cols:2});
+
+  nextBtn();
+}
+
+/* 選択肢レンダリング共通 */
+function renderChoices(keys, answerKey, cb, opt={}){
+  const box=document.createElement('div');
+  box.className='choices '+(opt.cols===3?'cols3':'cols2');
+  keys.forEach((k,i)=>{
+    const b=document.createElement('button'); b.className='opt';
+    let inner=`<span class="num">${i+1}</span>`;
+    if(opt.withGlyph){ inner+=noteGlyph(k,{w:30,h:40}); }
+    inner+=`<span>${DUR[k].name}</span>`;
+    b.innerHTML=inner;
+    b.onclick=()=>{
+      if(S.locked) return; S.locked=true;
+      const correct = k===answerKey;
+      Array.from(box.children).forEach((c,j)=>{
+        if(keys[j]===answerKey) c.classList.add('correct');
+        else if(j===i) c.classList.add('wrong');
+        else c.classList.add('dim');
+      });
+      score(correct);
+      cb&&cb(k,b,correct);
+    };
+    box.appendChild(b);
+  });
+  bodyEl.appendChild(box);
+}
+
+/* ============================================================
+   ② 音符あて：表示された音符の名称／拍数を答える
+============================================================ */
+// ②音価あて／③名前あて（いずれもデイリー）
+// kind='value'（音価＝長さを問う）／'name'（名前を問う）。
+// 問番号で静かに難化：序盤〜中盤は主題のみ、終盤（8問目〜）は名前と長さの両方を問う。
+function nqStage(qi){
+  if(qi<=1) return {pool:['whole','half','quarter','eighth']};                                     // やさしい（2問）
+  if(qi<=3) return {pool:['whole','half','dotHalf','quarter','eighth']};                            // 中くらい（2問）：付点二分
+  return {pool:['whole','half','dotHalf','quarter','dotQuarter','eighth','dotEighth','sixteenth']}; // 難しい（2問）：付点四分・付点八分・十六分
+}
+// セッション内で「答え」が重複しない出題列を作る。
+//   音価あて：長さ（tick）が重複しない／名前あて：名前（音符key＋休符か）が重複しない。
+function nqBuild(kind, N){
+  const used=new Set();
+  const uniq=(key,isRest)=> kind==='value' ? ('t'+DUR[key].tick) : (key+'|'+(isRest?'r':'n'));
+  const list=[];
+  for(let i=0;i<N;i++){
+    const pool=nqStage(i).pool;
+    let q, tries=0;
+    do{ q={key:rnd(pool), isRest:Math.random()<0.28}; tries++; }
+    while(used.has(uniq(q.key,q.isRest)) && tries<60);
+    used.add(uniq(q.key,q.isRest));
+    list.push(q);
+  }
+  return list;
+}
+function mNoteQuiz(kind){
+  modeHeader();
+  // 本日ぶんを達成済みなら「また明日」画面
+  if(SESS && SESS.todayDone){ renderDailyDone(SESS.dailyId); return; }
+  // セッション開始時に、答えが重複しない出題列を一度だけ用意（上級デイリーでは使わない）
+  if(SESS && SESS.daily && !SESS.nqList && !isMixedDaily()){ SESS.nqList = nqBuild(kind, SESS.N||6); }
+  const qi = (SESS && SESS.daily) ? SESS.i : 0;
+  const q = (!isMixedDaily() && SESS && SESS.nqList && SESS.nqList[qi])
+              ? SESS.nqList[qi]
+              : { key: rnd(nqStage(isMixedDaily()?5:qi).pool), isRest: Math.random()<0.28 };
+  const isRest=q.isRest, key=q.key, ans=DUR[key].tick;
+  const nameOf = k => isRest ? DUR[k].name.replace('音符','休符') : DUR[k].name;
+
+  bodyEl.innerHTML=`<div class="stage" style="padding:22px 8px">
+    ${noteGlyph(key,{w:70,h:80, rest:isRest})}</div>`;
+
+  const tickAll=[192,144,96,72,48,36,24,12];
+  const makeTickKeys=()=>{ const cand=new Set([ans]); while(cand.size<4){ cand.add(rnd(tickAll)); } return shuffle([...cand]); };
+  const makeNameKeys=()=>{ const others=shuffle(Object.keys(DUR).filter(k=>k!==key)).slice(0,3); return shuffle([key,...others]); };
+
+  const box=document.createElement('div'); box.className='choices cols2';
+  if(kind==='value'){
+    promptEl.innerHTML=`この${isRest?'休符':'音符'}の長さは？ <span class="toollabel">（4分音符＝1拍）</span>`;
+    const keys=makeTickKeys();
+    keys.forEach((tk,i)=>{
+      const b=document.createElement('button'); b.className='opt';
+      b.innerHTML=`<span class="num">${i+1}</span><span>${beatStr(tk)}</span>`;
+      b.onclick=()=>{
+        if(S.locked)return; S.locked=true;
+        const ok=tk===ans;
+        Array.from(box.children).forEach((c,j)=>{ if(keys[j]===ans)c.classList.add('correct'); else if(j===i)c.classList.add('wrong'); else c.classList.add('dim'); });
+        score(ok);
+        showFB(ok, nameOf(key), `${beatStr(ans)}`);
+      };
+      box.appendChild(b);
+    });
+  }else{
+    promptEl.innerHTML=`この${isRest?'休符':'音符'}の名前は？`;
+    const keys=makeNameKeys();
+    keys.forEach((k,i)=>{
+      const b=document.createElement('button'); b.className='opt';
+      b.innerHTML=`<span class="num">${i+1}</span><span>${nameOf(k)}</span>`;
+      b.onclick=()=>{
+        if(S.locked)return; S.locked=true;
+        const ok=k===key;
+        Array.from(box.children).forEach((c,j)=>{ if(keys[j]===key)c.classList.add('correct'); else if(j===i)c.classList.add('wrong'); else c.classList.add('dim'); });
+        score(ok);
+        showFB(ok, '', `${nameOf(key)}・${beatStr(ans)}`);
+      };
+      box.appendChild(b);
+    });
+  }
+  bodyEl.appendChild(box);
+  nextBtn();
+}
+
+/* ============================================================
+   ③ リズム耳コピ：クリックを聴いて音符を並べ再現
+============================================================ */
+function mListen(){
+  if(SESS && SESS.todayDone){ renderDailyDone(SESS.dailyId); return; }
+  const bpm=76;
+  const sig=sigFromMeter();
+  const beatsTotal=barTickOf(sig)/T;
+  const pool = isMixedDaily()? ADV_POOL : ((S.diff==='easy')?['quarter','half','eighth']:poolByDiff());
+  const answer = uniqueGen('listen', ()=>
+    fillBarSig(sig, pool).filter(k=>DUR[k].tick<=DUR['whole'].tick),
+    seq=>seq.join('-'));
+  const target = barTickOf(sig);
+  S.data={answer, target, placed:[], bpm, beats:answer.reduce((s,k)=>s+DUR[k].tick,0)/T, playing:false,
+          meterSig:sig, sig,
+          // カウントは「拍」の単位。拍が2つしかない拍子(2/4・6/8)は2小節ぶん数えて、
+          // 最後の1拍を空ける「間」が作れるようにする。
+          countN:(pulseCountOf(sig)<3 ? pulseCountOf(sig)*2 : pulseCountOf(sig)),
+          countUnit:pulseTickOf(sig)};
+
+  modeHeader();
+  hudR.appendChild(meterSeg());   // 拍子セグメント
+  // 拍子は答えではなく前提条件なので、必ず示す（どこまで埋めれば1小節かが分からないため）
+  promptEl.innerHTML=`<b>▶ 再生</b>を押してリズムを聴き、同じ並びを音符で作ってください。`
+    +`<span class="toollabel"> （${sig[0]}/${sig[1]}拍子 ＝ ひと小節は${barLenLabel(sig)}）</span>`;
+
+  bodyEl.innerHTML=`
+    <div class="fillmeter"><i id="fmeter"></i></div>
+    <div class="remainbeats" id="remainBeats"></div>
+    <div class="tray" id="tray"><span class="empty">ここに音符を並べます</span></div>
+    <div class="palette" id="palette"></div>`;
+
+  const palette=$('palette');
+  // パレット候補：出題プールの音価をひととおり提示（重複は除く）
+  const palKeys = pool.filter((v,i,a)=>a.indexOf(v)===i);
+  shuffle(palKeys).forEach(k=>{
+    const b=document.createElement('button'); b.className='opt';
+    b.style.flex='0 0 auto';
+    b.innerHTML=noteGlyph(k,{w:28,h:38})+`<span style="font-size:12px">${DUR[k].short}</span>`;
+    b.onclick=()=>addToTray(k);
+    palette.appendChild(b);
+  });
+
+  ctrlEl.innerHTML='';
+  const play=mkBtn('▶ 再生','ghost',()=>{
+    if(S.data.playing) return;          // カウント〜再生中の多重押し防止
+    S.data.playing=true;
+    play.disabled=true;
+    const counter=makeCountLayer();
+    playSequence(S.data.answer, S.data.bpm, {
+      accentFirst:true,
+      countIn:S.data.countN,            // 拍子ぶんのカウントイン（4/4なら4、6/8なら2）
+      countUnitTick:S.data.countUnit,   // 6/8は付点四分ごとにカウント
+      onCount:(n,isGo)=>counter.show(n,isGo),
+      onEnd:()=>{ S.data.playing=false; play.disabled=false; }
+    });
+  });
+  const clr=mkBtn('やり直し','sub',()=>{ S.data.placed=[]; renderTray(); });
+  const chk=mkBtn('答え合わせ','',()=>gradeListen());
+  chk.id='listenCheck';
+  // 上段＝何度でも押せる操作（聴く・直す）、下段＝決定。役割で段を分ける。
+  ctrlEl.classList.add('stack');
+  const sub=document.createElement('div'); sub.className='subrow';
+  sub.append(play, clr);
+  ctrlEl.append(sub, chk);
+  renderTray();
+}
+function addToTray(k){
+  if(S.locked) return;
+  const cur=S.data.placed.reduce((s,x)=>s+DUR[x].tick,0);
+  if(cur+DUR[k].tick>S.data.target){ flashMeter(); return; }
+  S.data.placed.push(k); renderTray();
+}
+function renderTray(){
+  const tray=$('tray'); if(!tray) return;
+  const p=S.data.placed;
+  tray.onclick=null;
+  if(!p.length){
+    // 音符が0個でも、拍子記号と拍のガイドが見える空の五線を出す。
+    // 「1小節がどれだけの長さか」を最初から目で確かめられるようにするため。
+    tray.innerHTML=`<div class="traystaff">${staffSVG([],{totalTick:S.data.target, meterSig:S.data.meterSig||null})}</div>`
+      +`<div class="traytip">下の音符を えらんで、この1小節を うめましょう</div>`;
+  }
+  else{
+    // 連桁付きの五線譜で表示（並べた音符がつながる）。タップで最後の音符を取り消し。
+    const seq=p.map(k=>({key:k,tick:DUR[k].tick}));
+    const tot=Math.max(S.data.target, seq.reduce((s,n)=>s+n.tick,0));
+    tray.innerHTML=`<div class="traystaff">${staffSVG(seq,{totalTick:tot, meterSig:S.data.meterSig||null, beam:true})}</div>`
+      +`<div class="traytip">タップで さいごの音符を とりけし</div>`;
+    tray.onclick=()=>{ if(S.locked)return; if(S.data.placed.length){ S.data.placed.pop(); renderTray(); } };
+  }
+  const cur=p.reduce((s,x)=>s+DUR[x].tick,0);
+  const m=$('fmeter'); if(m) m.style.width=Math.min(100,cur/S.data.target*100)+'%';
+  // 1小節が埋まるまで答え合わせは押せない。押せない理由が分かるよう残りを示す。
+  const full = cur===S.data.target;
+  const chk=$('listenCheck'); if(chk && !S.locked) chk.disabled=!full;
+  const rb=$('remainBeats');
+  if(rb){
+    rb.className='remainbeats'+(full?' full':'');
+    rb.textContent = full ? 'ひと小節ぶん そろいました' : `のこり ${beatStr(S.data.target-cur)}`;
+  }
+}
+function flashMeter(){ const m=$('fmeter'); if(!m)return; m.style.background='var(--bad)'; setTimeout(()=>m.style.background='var(--accent)',250); }
+function gradeListen(){
+  if(S.locked) return;
+  const a=S.data.answer, p=S.data.placed;
+  const sameLen=a.length===p.length;
+  const ok = sameLen && a.every((k,i)=>DUR[k].tick===DUR[p[i]].tick);
+  S.locked=true; score(ok);
+  const ansSeq=a.map(k=>({key:k,tick:DUR[k].tick, mark: ok?'ok':'ng'}));
+  const _wrap=document.createElement('div');
+  const _sig=S.data.sig||null;
+  _wrap.innerHTML=`<div class="stage" style="margin-bottom:6px">${staffSVG(ansSeq,{totalTick:S.data.target,meterSig:_sig,beam:true,tie:canTie(_sig)})}</div>`;
+  bodyEl.insertAdjacentElement('afterbegin', _wrap);
+  if(ok) showFB(true,'完全一致','耳と手がつながりました');
+  else showFB(false,'', 'これが正解のリズムです。もう一度聴き比べを');
+  celebrate(ok);
+  nextBtn();
+  // 聴き直しは操作行に置く。譜面の中と操作行の2か所に再生ボタンが出るのを避ける。
+  ctrlEl.classList.remove('stack'); ctrlEl.classList.add('split');
+  const _pbtn=mkBtn('▶ 答えを聴く','ghost',()=>{
+    _pbtn.disabled=true;
+    playStaffBar(ansSeq, 84, _wrap, ()=>{ _pbtn.disabled=false; });
+  });
+  ctrlEl.insertAdjacentElement('afterbegin', _pbtn);
+}
+
+/* ============================================================
+   ⑤ 音価てんびん：2つの音価を比較（タブ表示は⑤）
+============================================================ */
+/* 出題ステージ（0-based の問番号→課題の型）。
+   単音の比較 → 合計の比較 → 付点 → 同価異表記 → 複雑な組み合わせ、と体系的に難化させる。 */
+function scaleStage(i){
+  if(isMixedDaily()) i = 4;
+  if(i<=0) return {kind:'single', pool:['whole','half','quarter','eighth']};
+  if(i<=1) return {kind:'sum',    pool:['half','quarter','eighth']};
+  if(i<=2) return {kind:'dot',    pool:['dotHalf','half','dotQuarter','quarter','eighth']};
+  if(i<=3) return {kind:'equiv',  pool:['half','quarter','eighth','sixteenth']};
+  return   {kind:'mix',   pool:['dotHalf','half','dotQuarter','quarter','dotEighth','eighth','sixteenth']};
+}
+// 同価の並びを1音だけ差し替え、「そっくりに見えるが長さは違う」ひっかけを作る
+function perturbGroup(g, pool){
+  if(!g || !g.length) return g;
+  const i=Math.floor(Math.random()*g.length);
+  const cands=pool.filter(k=>DUR[k].tick!==DUR[g[i]].tick);
+  if(!cands.length) return g;
+  const out=g.slice(); out[i]=rnd(cands); return out;
+}
+function mScale(){
+  modeHeader();
+  if(SESS && SESS.todayDone){ renderDailyDone(SESS.dailyId); return; }
+  const qi = (SESS && SESS.i!=null) ? SESS.i : 0;
+  const st = scaleStage(qi);
+  const sum=g=>g.reduce((s,k)=>s+DUR[k].tick,0);
+  const pick=(pool,n)=>{ const a=[]; for(let i=0;i<n;i++) a.push(rnd(pool)); return a; };
+  const pair = uniqueGen('scale', ()=>{
+    let a, b, t=0;
+    if(st.kind==='single'){
+      // ①単音どうし：長さの差がはっきり分かるところから
+      a=[rnd(st.pool)];
+      do{ b=[rnd(st.pool)]; }while(DUR[b[0]].tick===DUR[a[0]].tick && ++t<20);
+    }else if(st.kind==='sum'){
+      // ②1つ 対 2つ：合計して比べる感覚を作る
+      do{ a=pick(st.pool,1); b=pick(st.pool,2); }while(sum(a)===sum(b) && ++t<20);
+    }else if(st.kind==='dot'){
+      // ③付点をふくむ比較：1.5倍の感覚を確かめる
+      do{ a=[rnd(['dotHalf','dotQuarter','dotEighth'])]; b=pick(st.pool, rnd([1,2])); }while(sum(a)===sum(b) && ++t<20);
+    }else if(st.kind==='equiv'){
+      // ④同価異表記：見た目が違っても同じ長さ。4割は「そっくりだが違う」ひっかけ
+      a=pick(st.pool, rnd([1,2]));
+      b=makeEquivalent(sum(a));
+      if(Math.random()<0.4) b=perturbGroup(b, st.pool);
+    }else{
+      // ⑤複雑な組み合わせ：3割は同価、残りは自由な組み合わせ
+      a=pick(st.pool, rnd([1,2,2,3]));
+      b=(Math.random()<0.3) ? makeEquivalent(sum(a)) : pick(st.pool, rnd([1,2,3]));
+    }
+    if(Math.random()<0.5){ const tmp=a; a=b; b=tmp; }   // 左右どちらに正解が来るかを均す
+    return {a,b};
+  }, r=>r.a.join('-')+'|'+r.b.join('-'));
+  const A=pair.a, B=pair.b;
+  const sa=sum(A), sb=sum(B);
+  const rel = sa>sb?'left':sa<sb?'right':'equal';
+  // 答え合わせで見せる内訳（足し算の式）
+  const brk = g => g.length>1
+    ? g.map(k=>beatStr(DUR[k].tick)).join(' ＋ ')+' ＝ '+beatStr(sum(g))
+    : beatStr(sum(g));
+
+  promptEl.innerHTML=`左と右、<b>長い</b>のはどちら？`;
+  bodyEl.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-top:4px">
+      ${sidePanel('左',A)}
+      <div class="balance" id="balance"><div class="scale">⚖</div><div class="cap">てんびん</div></div>
+      ${sidePanel('右',B)}
+    </div>`;
+
+  const opts=[['left','← 左が長い'],['equal','＝ 同じ'],['right','右が長い →']];
+  const box=document.createElement('div'); box.className='choices cols3';
+  opts.forEach(([v,l],i)=>{
+    const b=document.createElement('button'); b.className='opt';
+    b.innerHTML=`<span class="num">${i+1}</span><span style="font-size:13px">${l}</span>`;
+    b.onclick=()=>{
+      if(S.locked)return; S.locked=true;
+      const ok=v===rel;
+      Array.from(box.children).forEach((c,j)=>{
+        if(opts[j][0]===rel)c.classList.add('correct');
+        else if(j===i)c.classList.add('wrong'); else c.classList.add('dim');
+      });
+      score(ok);
+      showFB(ok,'', `左 ${brk(A)}　／　右 ${brk(B)}`);
+      // てんびんは「ゆれる → 長いほうへ傾く」の順で動かし、比較の過程を見せる
+      const bal=$('balance');
+      if(bal){
+        const sc=bal.querySelector('.scale');
+        bal.classList.remove('tilt-left','tilt-right');
+        if(sc){ sc.classList.remove('swing'); void sc.offsetWidth; sc.classList.add('swing'); }
+        setTimeout(()=>{
+          if(rel==='left') bal.classList.add('tilt-left');
+          else if(rel==='right') bal.classList.add('tilt-right');
+        }, 260);
+      }
+      // 回答後にバーを左端揃えで並べて比較表示
+      showBarCompare(sa, sb, rel);
+    };
+    box.appendChild(b);
+  });
+  bodyEl.appendChild(box);
+  nextBtn();
+}
+// 回答後：左右の音価をバーで並べて比較（左端揃え・棒グラフ的）
+function showBarCompare(sa, sb, rel){
+  const maxV=Math.max(sa,sb,1);
+  const pct = v => Math.max(6, (v/maxV)*100);  // 最小6%で視認性確保
+  const cls = side => rel==='equal' ? 'beq' : (rel===side ? 'bwin' : 'blose');
+  const shortPct = pct(Math.min(sa,sb));       // 短いほうの右端＝差の始まり
+  const diffTick = Math.abs(sa-sb);
+  const diffTxt = rel==='equal'
+    ? 'ぴったり 同じ ながさ'
+    : `${rel==='left'?'左':'右'}が ${beatStr(diffTick)} ながい`;
+  const wrap=document.createElement('div');
+  wrap.className='barcompare';
+  wrap.innerHTML=`
+    <div class="brow">
+      <span class="blabel">左</span>
+      <div class="btrack"><div class="bfill ${cls('left')}" style="width:0%"></div><span class="bval">${beatStr(sa)}</span><div class="bmark" style="left:${shortPct}%"></div></div>
+    </div>
+    <div class="brow">
+      <span class="blabel">右</span>
+      <div class="btrack"><div class="bfill ${cls('right')}" style="width:0%"></div><span class="bval">${beatStr(sb)}</span><div class="bmark" style="left:${shortPct}%"></div></div>
+    </div>
+    <div class="bnote">バーの 右はしの ズレが、ながさの ちがいです</div>
+    <div class="bdiff">${diffTxt}</div>`;
+  bodyEl.appendChild(wrap);
+  // 次フレームで幅を伸ばし、伸びきってから差の目印と結論を出す
+  requestAnimationFrame(()=>{
+    const fills=wrap.querySelectorAll('.bfill');
+    if(fills[0]) fills[0].style.width=pct(sa)+'%';
+    if(fills[1]) fills[1].style.width=pct(sb)+'%';
+  });
+  setTimeout(()=>{
+    if(rel!=='equal') wrap.querySelectorAll('.bmark').forEach(m=>m.classList.add('on'));
+    const d=wrap.querySelector('.bdiff'); if(d) d.classList.add('on');
+  }, 700);
+}
+function sidePanel(label,g){
+  const glyphs=g.map(k=>noteGlyph(k,{w:34,h:46})).join('');
+  return `<div style="text-align:center">
+    <div class="toollabel" style="margin-bottom:6px">${label}</div>
+    <div style="display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:3px;min-height:52px">${glyphs}</div>
+  </div>`;
+}
+function makeEquivalent(tick){
+  // tick合計に等しい別の並びを作る
+  const seq=fillBar(tick, ['half','quarter','eighth','dotQuarter','sixteenth','whole','dotHalf']);
+  return seq.length?seq:['quarter'];
+}
+
+/* ============================================================
+   ⑥ 小節けいさつ：拍数が合っているか判定（タブ表示は⑥）
+============================================================ */
+/* 違反のパターン。ランダムに音符を足し引きするのではなく、
+   書き譜でありがちな「意味のある間違い」を作る。 */
+const POLICE_FAULTS = {
+  short1:    {delta:-48, label:'1拍たりない'},
+  short_half:{delta:-24, label:'半拍たりない'},
+  over1:     {delta: 48, label:'1拍多い'},
+  over_half: {delta: 24, label:'半拍多い'},
+  dotMiss:   {dot:'miss', label:'付点の書きわすれ'},
+  dotAdd:    {dot:'add',  label:'よけいな付点'},
+};
+// 問番号→出題ステージ（差の大きい違反から、細かい違反へ）
+function policeStage(i){
+  if(isMixedDaily()) return {pool:ADV_POOL, sigs:SIG_ALL(),
+    faults:['short1','over1','short_half','over_half','dotMiss','dotAdd']};
+  if(i<=1) return {pool:['half','quarter','quarter','eighth'], sigs:[[4,4],[3,4]],
+    faults:['short1','over1']};
+  if(i<=3) return {pool:['half','dotHalf','quarter','quarter','dotQuarter','eighth'], sigs:[[4,4],[3,4],[2,4]],
+    faults:['short1','over1','short_half','over_half']};
+  return {pool:['half','dotHalf','quarter','dotQuarter','eighth','eighth','dotEighth','sixteenth'], sigs:SIG_ALL(),
+    faults:['short_half','over_half','dotMiss','dotAdd','short1']};
+}
+// 付点あり↔なしの対応表（書き間違いの再現に使う）
+const DOT_PAIR = {half:'dotHalf', quarter:'dotQuarter', eighth:'dotEighth'};
+const UNDOT = {dotHalf:'half', dotQuarter:'quarter', dotEighth:'eighth'};
+// 正しい小節に「ありがちな間違い」を1つだけ加える。適用できなければ null を返す。
+function applyFault(keys, fname){
+  const f=POLICE_FAULTS[fname]; if(!f) return null;
+  const arr=keys.slice();
+  if(f.dot){
+    const map = (f.dot==='miss') ? UNDOT : DOT_PAIR;
+    const idxs = arr.map((k,i)=>i).filter(i=>map[arr[i]]);
+    if(!idxs.length) return null;
+    const i=rnd(idxs);
+    const before=DUR[arr[i]].tick;
+    arr[i]=map[arr[i]];
+    return {seq:arr, label:f.label, delta:DUR[arr[i]].tick-before};
+  }
+  const d=f.delta;
+  // まず「1音だけ書き替える」形で作れないか探す（もっとも自然な間違い方）
+  const cands=[];
+  arr.forEach((k,i)=>{
+    Object.keys(DUR).forEach(k2=>{
+      if(DUR[k2].tick-DUR[k].tick===d) cands.push({i,k2});
+    });
+  });
+  if(cands.length){
+    const c=rnd(cands); arr[c.i]=c.k2;
+    return {seq:arr, label:f.label, delta:d};
+  }
+  // 書き替えで作れないときは、1音の増減で作る
+  if(d<0){
+    const i=arr.findIndex(k=>DUR[k].tick===-d);
+    if(i>=0){ arr.splice(i,1); return {seq:arr, label:f.label, delta:d}; }
+    return null;
+  }
+  const add=Object.keys(DUR).find(k=>DUR[k].tick===d);
+  if(!add) return null;
+  arr.splice(Math.floor(Math.random()*(arr.length+1)),0,add);
+  return {seq:arr, label:f.label, delta:d};
+}
+function mPolice(){
+  modeHeader();
+  if(SESS && SESS.todayDone){ renderDailyDone(SESS.dailyId); return; }
+  const qi = (SESS && SESS.i!=null) ? SESS.i : 0;
+  const st = policeStage(qi);
+  const q = uniqueGen('police', ()=>{
+    const sig = rnd(st.sigs);
+    const bt = barTickOf(sig);
+    const base = fillBarSig(sig, st.pool);          // まず「正しい小節」を作る
+    if(Math.random()<0.5) return {sig, barTick:bt, seq:base, fault:null};
+    // 違反：ありがちな間違いを1つだけ加える（作れなければ合格のまま出す）
+    for(const fname of shuffle(st.faults)){
+      const r=applyFault(base, fname);
+      if(r && r.seq.reduce((s,k)=>s+DUR[k].tick,0)!==bt) return {sig, barTick:bt, seq:r.seq, fault:r};
+    }
+    return {sig, barTick:bt, seq:base, fault:null};
+  }, r=>r.sig.join('/')+'|'+r.seq.join('-'));
+
+  const sig=q.sig, num=sig[0], den=sig[1], barTick=q.barTick, fault=q.fault;
+  const seq=q.seq.map(k=>({key:k}));
+  const sum=seq.reduce((s,n)=>s+DUR[n.key].tick,0);
+  const isOK = sum===barTick;   // 実測で合否を確定
+  const tieOK = canTie(sig);
+
+  promptEl.innerHTML=`拍子は <b>${num}/${den}</b>。この小節は拍数が正しい？ <span class="toollabel">（1小節＝${barLenLabel(sig)}）</span>`;
+  const showSeq=seq.map(n=>({key:n.key,tick:DUR[n.key].tick,rest:!!n.rest}));
+  bodyEl.innerHTML=`<div class="stage">${staffSVG(showSeq,{totalTick:Math.max(sum,barTick),meterSig:sig,beam:true})}</div>`;
+
+  const opts=[['ok','◎ 合格（ちょうど）'],['ng','✕ 違反（過不足あり）']];
+  const box=document.createElement('div'); box.className='choices cols2';
+  opts.forEach(([v,l],i)=>{
+    const b=document.createElement('button'); b.className='opt';
+    b.innerHTML=`<span class="num">${i+1}</span><span style="font-size:13px">${l}</span>`;
+    b.onclick=()=>{
+      if(S.locked)return; S.locked=true;
+      const ansV=isOK?'ok':'ng';
+      const ok=v===ansV;
+      Array.from(box.children).forEach((c,j)=>{
+        if(opts[j][0]===ansV)c.classList.add('correct');
+        else if(j===i)c.classList.add('wrong'); else c.classList.add('dim');
+      });
+      // 譜面に判定色（超過小節は、はみ出した音符だけを赤に）
+      let acc2=0;
+      const marked=seq.map(n=>{
+        acc2+=DUR[n.key].tick;
+        let mark = isOK?'ok':'ng';
+        if(!isOK && sum>barTick){ mark = (acc2>barTick)?'ng':undefined; }
+        return {key:n.key,tick:DUR[n.key].tick,rest:!!n.rest,mark};
+      });
+      const _stageEl=$('body').querySelector('.stage');
+      _stageEl.innerHTML=staffSVG(marked,{totalTick:Math.max(sum,barTick), barTick, meterSig:sig, beam:true, tie:tieOK});
+      // ▶再生（判定後の譜面をそのまま全部・♩=84・等速バー＋ハイライト。合格・違反どちらでも）
+      const _pbtn=mkBtn('▶ 再生','accent',()=>{ _pbtn.disabled=true; playStaffBar(marked, 84, bodyEl, ()=>{ _pbtn.disabled=false; }); });
+      const _pw=document.createElement('div'); _pw.style.cssText='text-align:center;margin:6px 0 10px'; _pw.appendChild(_pbtn);
+      _stageEl.insertAdjacentElement('afterend', _pw);
+      score(ok);
+      const diff=sum-barTick;
+      const detail = diff===0?'ちょうど'+barLenLabel(sig):(diff>0?`${beatStr(diff)}オーバー`:`${beatStr(-diff)}不足`);
+      const why = fault ? `　— ${fault.label}` : '';
+      showFB(ok, isOK?'合格':'違反', `合計 ${beatStr(sum)}（${detail}）${why}`);
+    };
+    box.appendChild(b);
+  });
+  bodyEl.appendChild(box);
+  nextBtn();
+}
+
+/* ============================================================
+   ホーム：きょうの練習
+============================================================ */
+// おすすめの並び。やさしい順に見て、まだ終わっていない最初のものをすすめる。
+const HOME_ORDER = [0,1,2,3,4,5,6];
+const HOME_WHY = {
+  fill:     'まずは ここから。音符の ながさに なれよう',
+  value:    '音符を見て、ながさが すぐ言えるように',
+  name:     '音符の なまえを おぼえよう',
+  listen:   '聞いた リズムを 譜面に してみよう',
+  scale:    '2つの ながさを くらべる 練習',
+  police:   '小節の 拍数が 合っているか 見やぶろう',
+  advanced: 'ぜんぶ まぜた 本番。今日の しあげに',
+};
+function homeRecommend(){
+  for(const mi of HOME_ORDER){
+    const M=MODES[mi]; if(!M || !M.daily) continue;
+    if(dailyState(M.daily)!=='done') return mi;
+  }
+  return -1;   // 今日はぜんぶ達成
+}
+function maxStreak(){
+  let mx=0;
+  for(const id in DAILIES){ const st=(DAILIES[id]||{}).streak||0; if(st>mx) mx=st; }
+  return mx;
+}
+function mHome(){
+  SESS=null;
+  hudR.innerHTML='';
+  setBubble('きょうも いっしょに やろう！');
+  const rec = homeRecommend();
+  const streak = maxStreak();
+  const rows = HOME_ORDER.map(mi=>{
+    const M=MODES[mi]; if(!M||!M.daily) return '';
+    const st = dailyState(M.daily);
+    const D = DAILIES[M.daily]||{};
+    const cls = st==='done'?'done' : st==='inprogress'?'mid' : 'todo';
+    const stat = st==='done'?'できた' : st==='inprogress'?'とちゅう' : 'これから';
+    const stars = (st==='done' && D.stars) ? `<span class="dstars">${'★'.repeat(D.stars)}</span>` : '';
+    return `<button class="drow ${cls}" data-mode="${mi}">
+        <span class="dico">${M.icon||''}</span>
+        <span class="dname">${M.label}</span>
+        ${stars}
+        <span class="dstat">${stat}</span>
+      </button>`;
+  }).join('');
+
+  const recBox = rec<0
+    ? `<div class="hall">🎉 きょうの ぜんぶ、たっせい！<br><span style="font-size:12px;font-weight:600;color:var(--muted)">練習は 何回でも できます</span></div>`
+    : `<div class="rec">
+         <div class="rlabel">きょうの おすすめ</div>
+         <div class="rname">${MODES[rec].icon||''} ${MODES[rec].label}</div>
+         <div class="rwhy">${HOME_WHY[MODES[rec].daily]||''}</div>
+         <button class="btn accent wide" id="recStart">はじめる →</button>
+       </div>`;
+
+  bodyEl.innerHTML=`<div class="home">
+      <p class="hgreet">きょうの 練習</p>
+      <p class="hstreak">${streak>0?`つづけて <b>${streak}</b> 日め 🔥`:'きょうから はじめよう'}</p>
+      ${recBox}
+      <h3>ぜんぶの メニュー</h3>
+      <div class="dlist">${rows}</div>
+    </div>`;
+
+  const rs=$('recStart'); if(rs) rs.onclick=()=>gotoMode(rec);
+  bodyEl.querySelectorAll('.drow').forEach(b=>{
+    b.onclick=()=>gotoMode(parseInt(b.getAttribute('data-mode'),10));
+  });
+}
+
+/* ============================================================
+   ⑧ 解説：音符・楽譜の決まりを解説
+============================================================ */
+function mReference(){
+  // 譜例を作る小ヘルパー（tick合計に応じ totalTick を自動設定）
+  const ex = (seq, opt={}) => {
+    const s = seq.map(o => typeof o==='string' ? {key:o,tick:DUR[o].tick} : {...o, tick:o.tick||DUR[o.key].tick});
+    const tt = opt.totalTick || s.reduce((a,n)=>a+n.tick,0);
+    return `<div class="refstaff">${staffSVG(s,{totalTick:tt, meterSig:opt.meterSig||null, beam:opt.beam})}</div>`;
+  };
+  // 音符一覧テーブルの1行
+  const rows = (rest) => Object.keys(DUR).map(k=>{
+    const d=DUR[k];
+    const nm = rest ? d.name.replace('音符','休符') : d.name;
+    return `<tr class="${rest?'rest-row':''}">
+      <td><div class="gl">${noteGlyph(k,{w:44,h:52,rest:rest})}</div></td>
+      <td class="nm">${nm}</td>
+      <td class="beat">${beatStr(d.tick)}</td>
+    </tr>`;
+  }).join('');
+
+  bodyEl.innerHTML = `
+  <div class="ref">
+    <p class="lead">🎵 音符や楽譜のきほんを、ぎゅっとまとめました。読み方に「あれ？」と思ったら、いつでもここに戻ってきてくださいね。</p>
+
+    <section>
+      <h2><span class="rn">1</span>音符の名前のひみつ 🔍</h2>
+      <p><b>「四分音符」って、どうして“四分”っていうの？</b> じつはこの名前、<span class="accent">音符を分数で見ている</span>んです。長さをくらべるときの“ものさし”になるのが <b>全音符</b>。これを「まるっと1個（＝1）」とすると…</p>
+      <div class="fracbox">
+        <div class="fracchip"><div class="frac">1</div><div class="lbl">全音符</div></div>
+        <div class="fracchip"><div class="frac">1/2</div><div class="lbl">二分音符</div></div>
+        <div class="fracchip"><div class="frac">1/4</div><div class="lbl">四分音符</div></div>
+        <div class="fracchip"><div class="frac">1/8</div><div class="lbl">八分音符</div></div>
+        <div class="fracchip"><div class="frac">1/16</div><div class="lbl">十六分音符</div></div>
+      </div>
+      <div class="refpop">
+        <span class="refwhy">なるほど！</span><b>四分音符 ＝ 全音符を4つに分けた1つ分</b>。だから「四分」。ピザを4等分した1切れ、とイメージするとバッチリです🍕
+      </div>
+      <p>この仕組みのうれしいところは、<b>基本の音符なら、名前を見れば長さの見当がつく</b>こと。「八分」なら全音符の8分の1、「十六分」なら16分の1。半分になるたびに、名前の数字がちょうど2倍になっていきます。</p>
+      <p class="refnote">◦ 休符も同じ考え方です。「四分休符」は四分音符と同じ長さのお休み。音符と休符は1つずつ長さが対応していて、音を出すか・お休みするかがちがうだけです。<br>◦ ただし <b>全休符</b> だけは少し特別で、「1小節まるごと休む」しるしとしても使われます。そのため、拍子によって実際の長さが変わることがあります。</p>
+    </section>
+
+    <section>
+      <h2><span class="rn">2</span>音符と休符の一覧 📋</h2>
+      <p>音の長さは <b>四分音符＝1拍</b> をものさしにして数えます。音符は「音を出す長さ」、休符は「音を出さずにお休みする長さ」。下の表のとおり、同じ長さどうしがペアになっています。</p>
+      <div class="refgrid2">
+        <div>
+          <p class="toollabel" style="text-align:center;margin-bottom:2px">🎵 音符</p>
+          <table class="reftable"><thead><tr><th>かたち</th><th>名前</th><th>長さ</th></tr></thead><tbody>${rows(false)}</tbody></table>
+        </div>
+        <div>
+          <p class="toollabel" style="text-align:center;margin-bottom:2px">😴 休符</p>
+          <table class="reftable"><thead><tr><th>かたち</th><th>名前</th><th>長さ</th></tr></thead><tbody>${rows(true)}</tbody></table>
+        </div>
+      </div>
+      <p class="refnote">◦ 長い音符ほどシンプル、短い音符ほど旗（符鉤）やビームがにぎやかになります。基本の形では、全音符は白丸だけ、二分音符は白丸＋棒、四分音符は黒丸＋棒、八分音符から旗がヒラヒラ。</p>
+    </section>
+
+    <section>
+      <h2><span class="rn">3</span>付点のしくみ ➕</h2>
+      <p>音符の右横にちょこんと点（<span class="accent">付点</span>）が付くと、その音符は <b>元の長さの1.5倍</b> にパワーアップ！ 「元の長さ＋その半分」と覚えれば計算はカンタンです。</p>
+      <div class="refbox">
+        <span class="eq">付点四分音符 ＝ 四分（1拍）＋ その半分（0.5拍）＝ 1.5拍</span>
+      </div>
+      ${ex(['dotQuarter','eighth','quarter','quarter'])}
+      <p class="refnote">◦ 上は「付点四分＋八分」で2拍、そこに四分が2つで合計4拍（4/4の1小節ぴったり）。この付点四分＋八分のコンビを、日本のリズム練習では「タッカ」と呼ぶことがあります。いろんな曲で大活躍する形です。</p>
+      <div class="refbox">
+        <span class="eq">付点二分音符 ＝ 2拍 ＋ 1拍 ＝ 3拍</span>　／　<span class="eq">付点八分音符 ＝ 0.5拍 ＋ 0.25拍 ＝ 0.75拍</span>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="rn">4</span>拍子の読み方 🥁</h2>
+      <p>曲の頭にある分数（<b>拍子記号</b>）は、<b>下の数字＝ものさしにする音符</b>、<b>上の数字＝1小節に入るその数</b>を表します。下が「4」なら四分音符がものさしです。</p>
+      ${ENABLE_68 ? `<p class="refnote">◦ ここで気をつけたいのが、<b>「上の数字＝感じる拍の数」とはかぎらない</b>こと。6/8は八分音符が6つ入りますが、6拍に数えるのではなく、3つずつをひとまとまりにして <b>2拍</b> のように感じます。</p>` : ''}
+      <div class="refgrid2">
+        <div class="refbox"><span class="eq">4/4</span> … 四分音符が4つ分＝<b>4拍</b>（いちばん定番！）</div>
+        <div class="refbox"><span class="eq">3/4</span> … 四分音符が3つ分＝<b>3拍</b>（ワルツなど）</div>
+        <div class="refbox"><span class="eq">2/4</span> … 四分音符が2つ分＝<b>2拍</b>（行進曲など）</div>
+        ${ENABLE_68 ? `<div class="refbox"><span class="eq">6/8</span> … 八分音符が6つ分。<b>3つずつ2まとまり</b>で感じます</div>` : ''}
+      </div>
+      <p style="margin-top:12px">たとえば <b>3/4</b> の小節は、下のように四分音符3つでちょうど満タンになります。</p>
+      ${ex(['quarter','quarter','quarter'], {totalTick:144, meterSig:[3,4]})}
+      ${ENABLE_68 ? `<p style="margin-top:12px"><b>6/8</b> は、八分音符6つでちょうど満タン。3つずつのまとまりが、連桁（横棒）でひと目で分かるように書かれます。</p>
+      ${ex(['eighth','eighth','eighth','eighth','eighth','eighth'], {totalTick:144, meterSig:[6,8], beam:true})}` : ''}
+      <p class="refnote">◦ 「⑥小節けいさつ」は、この1小節ぶんの長さがぴったり合っているかを見抜く練習です。${ENABLE_68 ? '2/4・3/4・4/4 に加えて 6/8 も出題されます。' : ''}</p>
+    </section>
+
+    <section>
+      <h2><span class="rn">5</span>連桁（れんこう・ビーム）のルール 🔗</h2>
+      <p>八分音符や十六分音符が続くときは、旗を1本ずつ描く代わりに <b>横棒でスッとつないで</b> 書きます。これが <span class="accent">連桁（ビーム）</span>。拍のまとまりがひと目で分かるようになる、便利な書き方です。</p>
+      <p style="margin-top:10px"><b>大事なのは「拍のまとまりが見えるように区切る」こと。</b> どこで切るかは拍子によって変わります。まずは 4/4。八分音符は <b>2拍ずつ</b>（1・2拍めで1本、3・4拍めで1本）にまとめるのがふつうです。下は八分4つが1本の横棒でつながった形。</p>
+      ${ex(['eighth','eighth','eighth','eighth','half'], {meterSig:[4,4], beam:true})}
+      <p style="margin-top:10px">同じ八分4つでも <b>3/4</b> では、1拍ごとに「2つ＋2つ」と切ります。拍のまとまりが変われば、連桁の切りかたも変わるのですね。</p>
+      ${ex(['eighth','eighth','eighth','eighth','quarter'], {meterSig:[3,4], beam:true})}
+      <p style="margin-top:10px">十六分音符になると横棒は <b>2本</b>（八分は1本）。十六分をふくむときは、拍の頭が見えるように <b>1拍ごと</b> に区切ります。</p>
+      ${ex(['sixteenth','sixteenth','sixteenth','sixteenth','half','quarter'], {meterSig:[4,4], beam:true})}
+      ${ENABLE_68 ? `<p style="margin-top:10px">6/8 のような拍子では、八分 <b>3つずつ</b> がひとまとまり。上の「拍子の読み方」にある譜例が、その形です。</p>` : ''}
+      <p class="refnote">◦ ここで挙げたのは、よく使われる書きかたの目安です。シンコペーションや歌詞の切れ目など、音楽の中身によって変わることもあります。<br>◦ 「①穴うめ」で正解すると、答えの譜面がこの連桁の形にまとまります。旗つきの単独表記と見比べてみてください。</p>
+    </section>
+
+    <section>
+      <h2><span class="rn">6</span>音価の合成（同じ長さの言いかえ）🔄</h2>
+      <p>ひとつの音符は、より短い音符の組み合わせで <b>まったく同じ長さ</b> に言いかえられます。これが分かると、リズムの読み替えが一気にラクになります。</p>
+      <div class="refbox"><span class="eq">全音符 ＝ 二分音符 ×2 ＝ 四分音符 ×4 ＝ 八分音符 ×8</span></div>
+      <div class="refbox"><span class="eq">四分音符 ＝ 八分音符 ×2 ＝ 十六分音符 ×4</span></div>
+      <p style="margin-top:10px">下の3小節は、見た目はぜんぜん違うのに <b>ぜんぶ同じ2拍分</b> なんです。</p>
+      ${ex(['half'], {totalTick:96})}
+      ${ex(['quarter','quarter'], {totalTick:96})}
+      ${ex(['eighth','eighth','eighth','eighth'], {totalTick:96, beam:true})}
+      <p class="refnote">◦ 「⑤音価てんびん」は、左右の音価の合計が同じか・どちらが長いかを見極める練習です。この合成の感覚がそのまま活きます。</p>
+    </section>
+
+    <p class="refnote" style="text-align:center;margin-top:16px">— 百合ヶ丘ギター教室 SingingBirds —</p>
+  </div>`;
+}
+
+/* ============================================================
+   カウントイン表示（③リズム耳コピ）
+============================================================ */
+// カウントインのオーバーレイを用意し、show(n,isGo) で数字を更新するハンドラを返す
+function makeCountLayer(){
+  const card=$('stageCard'); if(!card) return {show(){},clear(){}};
+  const old=card.querySelector('.countin'); if(old) old.remove();
+  const layer=document.createElement('div'); layer.className='countin';
+  const span=document.createElement('div'); span.className='cnum';
+  layer.appendChild(span);
+  card.appendChild(layer);
+  return {
+    show(n, isGo){
+      if(!layer.parentNode) return;
+      if(isGo){
+        span.className='cgo'; span.textContent='スタート！';
+        setTimeout(()=>{ if(layer.parentNode) layer.remove(); }, 420);
+      }else{
+        span.textContent=String(n);
+        // reflowでポップアニメーションを毎拍やり直す
+        span.className='cnum'; void span.offsetWidth; span.className='cnum beat';
+      }
+    },
+    clear(){ if(layer.parentNode) layer.remove(); }
+  };
+}
+
+/* ============================================================
+   祝福オーバーレイ（正解演出）
+============================================================ */
+/*
+  正解イラストの差し替え方法：
+  下の CELEBRATE_IMG に、画像の base64 データURI を入れてください。
+  例）const CELEBRATE_IMG = "data:image/png;base64,iVBORw0KGgo...";
+  空文字のあいだは、絵文字（🎉）のプレースホルダーが表示されます。
+  ※ 単一HTML・オフライン動作を保つため、外部URLではなく必ずデータURIで埋め込みます。
+*/
+const CELEBRATE_IMG = ""; // ← ここに正解イラストのデータURIを貼り付け
+
+function celebrate(ok){
+  const card=$('stageCard'); if(!card) return;
+  // 既存の演出があれば消す
+  const old=card.querySelector('.celebrate'); if(old) old.remove();
+
+  const layer=document.createElement('div');
+  layer.className='celebrate '+(ok?'ok':'ng');
+
+  const flash=document.createElement('div'); flash.className='flash';
+  layer.appendChild(flash);
+
+  const hero=document.createElement('div'); hero.className='hero';
+  if(ok){
+    const art = CELEBRATE_IMG
+      ? `<div class="heroArt"><img src="${CELEBRATE_IMG}" alt="正解イラスト"></div>`
+      : `<div class="heroArt">🎉</div>`;
+    hero.innerHTML = `${art}<div class="heroTxt">せいかい！</div>`;
+  }else{
+    hero.innerHTML = `<div class="heroX">✕</div>`;
+  }
+  layer.appendChild(hero);
+
+  // 紙吹雪（正解時のみ）
+  if(ok){
+    const colors=['#c0472b','#2f7d5b','#b08833','#3a4a63','#d98a3d','#5b8def'];
+    const N=44, W=card.clientWidth, H=card.clientHeight;
+    for(let i=0;i<N;i++){
+      const c=document.createElement('div'); c.className='confetti';
+      const x=Math.random()*W;
+      const fall=(H*0.7+Math.random()*H*0.5).toFixed(0)+'px';
+      const spin=(Math.random()*720-360).toFixed(0)+'deg';
+      const dur=(0.9+Math.random()*0.8).toFixed(2);
+      const delay=(Math.random()*0.25).toFixed(2);
+      c.style.left=x+'px';
+      c.style.background=colors[i%colors.length];
+      c.style.setProperty('--fall',fall);
+      c.style.setProperty('--spin',spin);
+      c.style.animationDuration=dur+'s';
+      c.style.animationDelay=delay+'s';
+      if(Math.random()<0.4){ c.style.width='7px'; c.style.height='7px'; c.style.borderRadius='50%'; }
+      layer.appendChild(c);
+    }
+  }
+
+  card.appendChild(layer);
+  // 中央の合図はふわっと消す（背景の譜面・結果表示は残る）
+  const holdMs = ok?1050:750;
+  setTimeout(()=>{ hero.classList.add('fade'); }, holdMs);
+  setTimeout(()=>{ if(layer.parentNode) layer.remove(); }, holdMs+520);
+}
+
+/* ============================================================
+   共通ボタン
+============================================================ */
+function mkBtn(label,cls,fn){
+  const b=document.createElement('button');
+  b.className='btn'+(cls?' '+cls:''); b.textContent=label; b.onclick=fn; return b;
+}
+function nextBtn(){
+  // セッション中は「回答後」にのみ進行ボタンを出す（出題直後の呼び出しでは何も描かない）
+  if(SESS && SESS.active){
+    if(!SESS.answered){ ctrlEl.innerHTML=''; return; }
+    renderSessionNext();
+    return;
+  }
+  // 非セッション（保険）：従来どおり
+  ctrlEl.innerHTML='';
+  const n=mkBtn('つぎの問題 →','',()=>loadMode());
+  n.classList.add('wide');
+  ctrlEl.appendChild(n);
+}
+
+/* ============================================================
+   起動
+============================================================ */
+// 最初のユーザー操作で AudioContext を起こす（iOS対策）
+document.body.addEventListener('touchstart',()=>audio(),{once:true,passive:true});
+document.body.addEventListener('mousedown',()=>audio(),{once:true});
+
+(function(){ const t=$('tabToggle'); if(t) t.onclick=()=>{ tabsOpen=!tabsOpen; applyTabState(); }; })();
+buildTabs();
+sessionStart();
+loadMode();
+updHUD();
+
+/* ---- 検証用：フッターを素早く5回タップで「本日のデイリー」をリセット ---- */
+(function(){
+  const f=document.querySelector('footer'); if(!f) return;
+  let taps=0, timer=null;
+  const hit=()=>{
+    taps++;
+    clearTimeout(timer); timer=setTimeout(()=>{ taps=0; }, 1500);
+    if(taps>=5){
+      taps=0;
+      try{ for(const id in DAILY_KEYS){ localStorage.removeItem(DAILY_KEYS[id]); DAILIES[id]={}; } }catch(e){}
+      if(MODES[S.mode]&&MODES[S.mode].daily){ sessionStart(); }
+      f.textContent='（デイリーをリセットしました）';
+      setTimeout(()=>{ f.textContent='百合ヶ丘ギター教室 SingingBirds ／ オフライン動作・単一ファイル'; }, 1400);
+      if(MODES[S.mode]&&MODES[S.mode].daily) loadMode();
+    }
+  };
+  f.style.cursor='pointer';
+  f.addEventListener('click', hit);
+})();
+</script>
+</body>
+</html>
