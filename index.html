@@ -674,6 +674,10 @@
   /* 操作行の外に置く主ボタン（ホーム・デイリー完了画面）も全幅に揃える */
   .home .rec .btn, .dailydone .btn{width:100%;display:block;}
 </style>
+<!-- 共通のリズム譜（読み込めない時は、これまでの描き方で出す） -->
+<script src="https://yagarguitar-stack.github.io/design-system/v1/rhythm.js"></script>
+<style>/* 共通のリズム譜の色：記号は本文の色、再生の線と光は強調色、正誤は緑と赤、空欄は強調色、拍の点線は薄く */
+.rhy-slot{--ds-rhy-ink:var(--ink);--ds-rhy-hi:var(--accent);--ds-rhy-ok:var(--good);--ds-rhy-ng:var(--bad);--ds-rhy-blank:var(--accent);--ds-rhy-blank-bg:var(--accent-soft);--ds-rhy-guide:rgba(58,55,48,.35)}</style>
 </head>
 <body>
 <div class="wrap">
@@ -943,7 +947,58 @@ function expandTies(seq,totalTick){
   return out;
 }
 
+/* ═══ 共通のリズム譜（rhythm.js）で描くための受け渡し ═══
+   リズトレの譜面（seq・opt）を、共通のリズム譜の形に直す。 */
+function wpRhyOk(){return !!(window.DS&&DS.rhythm&&DS.rhythm.render&&DS.rhythm.newTupletId&&parseFloat(DS.rhythm.version)>=1.2);}   // 1.2 より古い rhythm.js の時は、これまでの描き方で出す
+function wpScore(x){
+  var R=DS.rhythm,Q=R.T.QUARTER,K=Q/48,o=x.opt||{};
+  var ticks=x.seq.map(function(n){return n.tick||(DUR[n.key]||{tick:48}).tick;});
+  var sum=ticks.reduce(function(a,b){return a+b;},0),total=o.totalTick||0,sig=o.meterSig;
+  if(!sig){var t=o.barTick||total||sum;sig=[Math.max(1,Math.round(t/48)),4];}      // 拍子記号の無い譜例は、長さから拍子を決めて記号は出さない
+  var barT=sig[0]*192/sig[1],tu={},acc={};
+  (x.tuplets||[]).forEach(function(sp){var n=+(sp.label||3),id=R.newTupletId(),inn=1;while(inn*2<n)inn*=2;
+    for(var i=sp.from;i<=sp.to;i++)tu[i]={n:n,in:inn,id:id};});
+  (x.accents||[]).forEach(function(i){acc[i]=1;});
+  var bars=[],cur=null,pos=0;
+  var groups=sig[1]===8&&sig[0]===7?[2,2,3]:sig[1]===8&&sig[0]===5?[3,2]:null;   // 変拍子のまとまり（本文の説明に合わせる）
+  function nb(){cur={ts:sig.slice(),groups:groups,notes:[]};bars.push(cur);pos=0;}
+  nb();
+  var one=!!o.barTick;   // 答え合わせ：小節は1つ。長すぎる分は、はみ出しとして描く
+  x.seq.forEach(function(n,i){var left=ticks[i],first=true;
+    while(left>0){if(pos>=barT-1e-9&&!one)nb();var take=one?left:Math.min(left,barT-pos);
+      var note={len:take*K,rest:!!n.rest,accent:first&&!!acc[i],ref:i,mark:n.mark,blank:!!n.blank};if(tu[i])note.tu=tu[i];
+      cur.notes.push(note);left-=take;pos+=take;if(left>0&&!n.rest)note.tie=true;first=false;}});
+  if(pos<barT-1e-9)cur.notes.push({len:(barT-pos)*K,rest:true,hidden:true});   // 足りない分は空けておく（これまでと同じ）
+  return {bars:bars};
+}
+/* 描く。look：{staff:1|5, guides:true/false, beam:'half'|'beat'} */
+function wpRender(el,x,look){
+  look=look||WP_LOOK;var o=x.opt||{};
+  var w=Math.max(260,(el.clientWidth||el.parentNode&&el.parentNode.clientWidth||600)-4);
+  var v=DS.rhythm.render(el,wpScore(x),{sp:8,beatWidth:62,staff:look.staff,beatGuides:look.guides,beamGroup:look.beam,beams:!!o.beam,
+    split:o.tie?undefined:false,timeSig:!!o.meterSig,width:w});
+  // ストロークの向き（∏＝ダウン、∨＝アップ、x＝空ピッキング）
+  if(x.strokes){var NS='http://www.w3.org/2000/svg',sp=8,hw=sp*1.18;
+    x.strokes.split('').forEach(function(c,i){var ev=v.byRef(i);if(!ev)return;
+      var cx=ev.x+hw/2,yT=ev.y0+sp*2.5,yB=yT+sp*1.1,up=(c==='U'||c==='u'),dim=(c==='x'||c==='X');
+      var d=up?'M'+(cx-4.5)+' '+yT+'L'+cx+' '+yB+'L'+(cx+4.5)+' '+yT:'M'+(cx-4.5)+' '+yB+'L'+(cx-4.5)+' '+yT+'L'+(cx+4.5)+' '+yT+'L'+(cx+4.5)+' '+yB;
+      var pth=document.createElementNS(NS,'path');pth.setAttribute('d',d);pth.setAttribute('fill','none');pth.setAttribute('stroke','currentColor');
+      pth.setAttribute('stroke-width','1.6');pth.setAttribute('opacity',dim?'.3':'.85');v.svg.appendChild(pth);});}
+  el._rhy=v;return v;
+}
+var WP_LOOK={staff:1,guides:true,beam:'half'};   // 1本線・拍の点線あり・8分は2拍ずつ（Woodpecker と同じ）
+// 置き場所だけ先に書き、画面に入った後で wpHydrate が描く
+function wpHydrate(root){
+  if(!wpRhyOk())return;
+  (root||document).querySelectorAll('.rhy-slot:not([data-done])').forEach(function(slot){
+    var d;try{d=JSON.parse(decodeURIComponent(slot.getAttribute('data-rhy')));}catch(e){return;}
+    slot.setAttribute('data-done','1');wpRender(slot,{seq:d.seq,opt:d.opt||{}});
+  });
+}
+if(window.MutationObserver)new MutationObserver(function(){wpHydrate();}).observe(document.documentElement,{childList:true,subtree:true});
+
 function staffSVG(seq, opt={}){
+  if(wpRhyOk())return '<div class="rhy-slot" data-rhy="'+encodeURIComponent(JSON.stringify({seq:seq,opt:opt}))+'"></div>';
   // seq: [{key, rest, blank, mark}]
   const pad=18, slotMin=42, top=14, staveH=48, height=86;
   const totalTick = opt.totalTick || seq.reduce((s,n)=>s+(n.tick||DUR[n.key].tick),0) || 192;
@@ -1209,8 +1264,10 @@ function playStaffBar(seq, bpm, container, onDone){
   const totalTick=seq.reduce((s,n)=>s+(n.tick||(DUR[n.key]||{tick:48}).tick),0);
   const total=(totalTick/T)*spb;
   const clearHL=()=>container.querySelectorAll('.snote.hl').forEach(e=>e.classList.remove('hl'));
+  wpHydrate(container);   // まだ描いていない譜面があれば先に描く
+  const rviews=Array.from(container.querySelectorAll('.rhy-slot')).map(s=>s._rhy).filter(Boolean);   // 共通のリズム譜で描いた譜面
   // 各段：再生時刻→x座標 の区分線形の点列と、バー線を用意
-  const bars=Array.from(container.querySelectorAll('.stage svg')).map(svg=>{
+  const bars=rviews.length?[]:Array.from(container.querySelectorAll('.stage svg')).map(svg=>{
     const vb=(svg.getAttribute('viewBox')||'0 0 300 86').split(' ').map(Number);
     const pts=[]; let acc=0;
     seq.forEach((n,i)=>{
@@ -1234,15 +1291,17 @@ function playStaffBar(seq, bpm, container, onDone){
     return pts[pts.length-1].x; };
   let raf=null, startT=(window.performance&&performance.now?performance.now():Date.now()), done=false;
   const finish=()=>{ if(done) return; done=true; if(raf) cancelAnimationFrame(raf);
-    bars.forEach(b=>{ if(b.line.parentNode) b.line.parentNode.removeChild(b.line); }); clearHL(); onDone&&onDone(); };
+    bars.forEach(b=>{ if(b.line.parentNode) b.line.parentNode.removeChild(b.line); }); clearHL(); rviews.forEach(v=>v.clear()); onDone&&onDone(); };
   const now=()=>(window.performance&&performance.now?performance.now():Date.now());
   const animate=()=>{ const el=(now()-startT)/1000 - lead; const tt=Math.max(0,el);
     bars.forEach(b=>{ const x=xAt(b.pts,tt); b.line.setAttribute('x1',String(x)); b.line.setAttribute('x2',String(x)); });
+    rviews.forEach(v=>v.cursor(Math.min(tt/spb*DS.rhythm.T.QUARTER, v.total-1)));
     if(el<total+0.15) raf=requestAnimationFrame(animate); };
   raf=requestAnimationFrame(animate);
   playSequence(seq, bpm, {
     accentFirst:true,
-    onStep:(i)=>{ clearHL(); container.querySelectorAll(`.snote[data-src="${i}"]`).forEach(e=>e.classList.add('hl')); },
+    onStep:(i)=>{ clearHL(); container.querySelectorAll(`.snote[data-src="${i}"]`).forEach(e=>e.classList.add('hl'));
+      rviews.forEach(v=>v.events.forEach(e=>v.light(e.i, e.ref===i))); },
     onEnd:finish
   });
 }
