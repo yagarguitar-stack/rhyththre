@@ -678,8 +678,124 @@
 <script src="https://yagarguitar-stack.github.io/design-system/v1/rhythm.js"></script>
 <style>/* 共通のリズム譜の色：記号は本文の色、再生の線と光は強調色、正誤は緑と赤、空欄は強調色、拍の点線は薄く */
 .rhy-slot{--ds-rhy-ink:var(--ink);--ds-rhy-hi:var(--accent);--ds-rhy-ok:var(--good);--ds-rhy-ng:var(--bad);--ds-rhy-blank:var(--accent);--ds-rhy-blank-bg:var(--accent-soft);--ds-rhy-guide:rgba(58,55,48,.35)}</style>
+<!-- 共通の画面の部品（こどもの五線ノートの見た目）。読み込めない時・古い版の時は、これまでの見た目のまま -->
+<link rel="stylesheet" href="https://yagarguitar-stack.github.io/design-system/v1/components.css">
+<script src="https://yagarguitar-stack.github.io/design-system/v1/components.js"></script>
+<style>
+/* ===== 共通の部品（版 1.1 以上）が読めた時だけ効く（body に rz-ds と ds-note が付く） ===== */
+body.rz-ds{
+  --paper:var(--ds-paper);
+  --paper2:color-mix(in srgb,var(--ds-ink) 5%,var(--ds-card));
+  --card:var(--ds-card);
+  --ink:var(--ds-ink);
+  --stave:color-mix(in srgb,var(--ds-ink) 86%,var(--ds-card));
+  --muted:color-mix(in srgb,var(--ds-ink) 62%,var(--ds-card));
+  --line:color-mix(in srgb,var(--ds-ink) 30%,var(--ds-card));
+  --line2:color-mix(in srgb,var(--ds-ink) 14%,var(--ds-card));
+  --accent:var(--ds-hi);
+  --accent-deep:color-mix(in srgb,var(--ds-hi) 55%,var(--ds-ink));
+  --accent-soft:color-mix(in srgb,var(--ds-hi) 18%,var(--ds-card));
+  --good:var(--rz-good);
+  --good-soft:color-mix(in srgb,var(--rz-good) 16%,var(--ds-card));
+  --bad:var(--ds-accent);
+  --bad-soft:color-mix(in srgb,var(--ds-accent) 13%,var(--ds-card));
+  --bar-fill:color-mix(in srgb,var(--rz-sky) 80%,var(--ds-ink));
+  --gold:var(--ds-hi);
+  --sky:var(--rz-sky);
+  --sky-soft:color-mix(in srgb,var(--rz-sky) 16%,var(--ds-card));
+  --star:var(--ds-hi);
+  --shadow:none;
+  --sans:var(--ds-font);--serif:var(--ds-font);--round:var(--ds-font);
+  --rz-good:#2f9460;--rz-sky:#4c93c8;
+  position:relative;min-height:100vh;box-sizing:border-box;padding:0 0 70px;
+  color:var(--ds-ink);background-color:var(--ds-paper);font-family:var(--ds-font);transition:background-color .5s,color .5s;
+}
+@media (prefers-color-scheme:dark){ body.rz-ds:not(.ds-day){--rz-good:#8fdcaa;--rz-sky:#8fc7e8} }
+body.rz-ds.ds-night{--rz-good:#8fdcaa;--rz-sky:#8fc7e8}
+body.rz-ds .ds-deco{position:absolute;pointer-events:none}
+body.rz-ds .wrap{position:relative;z-index:1}
+body.rz-ds .rhy-slot{--ds-rhy-ink:var(--ds-ink);--ds-rhy-hi:var(--ds-accent);--ds-rhy-blank:var(--ds-ink);--ds-rhy-blank-bg:var(--accent-soft);--ds-rhy-guide:color-mix(in srgb,var(--ds-ink) 32%,transparent)}
+body.rz-ds footer{position:relative;z-index:1}
+
+/* 見出し：題にマーカー */
+body.rz-ds h1{display:inline-block;color:var(--ink);font-weight:800;letter-spacing:.2em;padding:0 12px;background:linear-gradient(transparent 58%,var(--ds-tape1) 58%)}
+body.rz-ds .sub{color:var(--muted)}
+body.rz-ds .bubble{background:var(--card);border:2px solid var(--ink);border-radius:12px;color:var(--ink);box-shadow:3px 3px 0 var(--ds-shadow)}
+body.rz-ds .bubble::before{border-top-color:var(--ink)}
+body.rz-ds .bubble::after{border-top-color:var(--card)}
+body.rz-ds .bubble.ok{background:var(--good-soft);border-color:var(--good);color:var(--ink)}
+body.rz-ds .bubble.ng{background:var(--bad-soft);border-color:var(--bad);color:var(--ink)}
+body.rz-ds .bubble.ok::before{border-top-color:var(--good)} body.rz-ds .bubble.ng::before{border-top-color:var(--bad)}
+body.rz-ds .bubble.ok::after{border-top-color:var(--good-soft)} body.rz-ds .bubble.ng::after{border-top-color:var(--bad-soft)}
+body.rz-ds #birdGreen.sensei{border:2px solid var(--ink);border-radius:8px;box-shadow:4px 4px 0 var(--ds-shadow)}
+
+/* シールのボタン（押すとぺたっと沈む） */
+body.rz-ds .tabtoggle,body.rz-ds nav.modes button,body.rz-ds nav.sections button.sec,body.rz-ds .btn,body.rz-ds .opt,body.rz-ds .home .drow,body.rz-ds .seg{
+  border:2px solid var(--ink);box-shadow:3px 3px 0 var(--ds-shadow);transition:transform .08s,box-shadow .08s,background .15s}
+body.rz-ds .tabtoggle,body.rz-ds nav.modes button,body.rz-ds nav.sections button.sec{background:var(--card);color:var(--ink);border-radius:12px}
+body.rz-ds .tabwrap:not(.collapsed) .tabtoggle{background:var(--ds-tape1)}
+body.rz-ds nav.modes button[aria-selected="true"],body.rz-ds nav.sections button.sec[aria-selected="true"],body.rz-ds nav.sections button.sec-main[aria-selected="true"]{background:var(--ds-hi);color:var(--ds-on-hi);border-color:var(--ink)}
+body.rz-ds nav.modes button[aria-selected="true"] .ico{background:none}
+body.rz-ds .tabtoggle:active,body.rz-ds nav.modes button:active,body.rz-ds nav.sections button.sec:active,body.rz-ds .btn:active,body.rz-ds .opt:active:not(:disabled),body.rz-ds .home .drow:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ds-shadow)}
+body.rz-ds .btn,body.rz-ds .btn.accent{background:var(--ds-hi);border-color:var(--ink);color:var(--ds-on-hi);border-radius:14px;font-weight:800;letter-spacing:.08em}
+body.rz-ds .btn.ghost{background:var(--card);color:var(--ink)}
+body.rz-ds .btn:disabled{box-shadow:none;opacity:.45}
+
+/* 札（テープで貼る） */
+body.rz-ds .card{position:relative;border:0;border-radius:6px;background:var(--card);box-shadow:0 1px 0 rgba(0,0,0,.06),0 8px 18px -10px rgba(0,0,0,.3)}
+body.rz-ds .card::before{content:'';position:absolute;top:-9px;left:50%;width:84px;height:20px;margin-left:-42px;transform:rotate(-3deg);opacity:.95;z-index:2;pointer-events:none;
+  background:repeating-linear-gradient(45deg,var(--ds-tape2) 0 6px,color-mix(in srgb,var(--ds-tape2) 70%,#fff) 6px 12px)}
+body.rz-ds .home .rec{border:2px solid var(--ink);border-radius:12px;background:var(--accent-soft);box-shadow:3px 3px 0 var(--ds-shadow)}
+body.rz-ds .home .drow{background:var(--card);border-radius:12px;color:var(--ink)}
+body.rz-ds .home .drow.done{background:var(--good-soft)}
+body.rz-ds .sessbar{border:2px solid var(--ink);border-radius:12px;background:var(--card)}
+body.rz-ds .sess-dots .d{border:2px solid var(--ink);background:var(--card)}
+body.rz-ds .sess-dots .d.ok{background:var(--good);color:var(--card)}
+body.rz-ds .sess-dots .d.ng{background:var(--bad);color:var(--card)}
+body.rz-ds .sess-dots .d.now{background:var(--ds-tape1)}
+body.rz-ds .stage{background:var(--card);border:2px dashed var(--line);border-radius:10px}
+body.rz-ds .prompt{color:var(--ink)}
+
+/* 答えの札 */
+body.rz-ds .opt{background:var(--card);color:var(--ink);border-radius:12px}
+body.rz-ds .opt .num{border:2px solid var(--ink);background:var(--card);color:var(--ink)}
+body.rz-ds .opt.correct{background:var(--good-soft);border-color:var(--ink)}
+body.rz-ds .opt.correct .num{background:var(--good);border-color:var(--ink);color:var(--card)}
+body.rz-ds .opt.wrong{background:var(--bad-soft);border-color:var(--ink)}
+body.rz-ds .opt.wrong .num{background:var(--bad);border-color:var(--ink);color:var(--card)}
+body.rz-ds .opt.dim{box-shadow:none}
+body.rz-ds .fb{border-radius:12px;border:2px solid var(--ink);box-shadow:3px 3px 0 var(--ds-shadow)}
+body.rz-ds .fb.ok{background:var(--good-soft);color:var(--ink)}
+body.rz-ds .fb.ng{background:var(--bad-soft);color:var(--ink)}
+body.rz-ds .fb b,body.rz-ds .fb strong{color:var(--ink)}
+body.rz-ds .tray{background:var(--card);border:2px dashed var(--ink);border-radius:12px}
+body.rz-ds .tray .chip{background:var(--card);border:2px solid var(--ink);border-radius:10px;box-shadow:2px 2px 0 var(--ds-shadow)}
+body.rz-ds .seg{border-radius:12px;background:var(--card);overflow:hidden}
+body.rz-ds .seg button{color:var(--ink)}
+body.rz-ds .seg button[aria-pressed="true"]{background:var(--ds-hi);color:var(--ds-on-hi)}
+body.rz-ds .difftoast,body.rz-ds .honban-tag{background:var(--ds-hi);color:var(--ds-on-hi);border:2px solid var(--ink)}
+body.rz-ds .celebrate.ok .heroTxt{color:var(--card)}
+body.rz-ds .countin .cnum{text-shadow:none;color:var(--ds-hi);-webkit-text-stroke:2px var(--ink)}
+
+/* 解説 */
+body.rz-ds .ref section{background:var(--card);border:2px solid var(--ink);border-radius:12px;box-shadow:3px 3px 0 var(--ds-shadow)}
+body.rz-ds .ref h2 .rn{background:var(--ds-hi);color:var(--ds-on-hi);border:2px solid var(--ink)}
+body.rz-ds .fracchip{background:var(--card);border:2px solid var(--ink);border-radius:10px}
+body.rz-ds .refbox{background:var(--paper2);border-radius:10px}
+body.rz-ds .refpop{background:var(--good-soft);border-left-color:var(--good);border-radius:10px;color:var(--ink)}
+body.rz-ds .refpop b{color:var(--ink)}
+body.rz-ds .refwhy{background:var(--ds-hi);color:var(--ds-on-hi)}
+body.rz-ds .refstaff,body.rz-ds .reftable .gl{background:transparent}
+
+/* ほめる画面 */
+body.rz-ds .fc-modal{background:var(--card);border:2px solid var(--ink);border-radius:16px;box-shadow:6px 6px 0 var(--ds-shadow)}
+</style>
 </head>
 <body>
+<script>/* 共通の画面の部品（版 1.1 以上）が読めた時だけ、こどもの五線ノートの見た目にする */
+(function(){if(!(window.DS&&DS.ui&&parseFloat(DS.ui.version)>=1.1))return;var b=document.body;b.classList.add('ds-note','rz-ds');
+  b.setAttribute('data-ds-enter','off');
+  document.addEventListener('DOMContentLoaded',function(){DS.ui.init(b);});})();</script>
 <div class="wrap">
   <header>
     <h1>リズトレ</h1>
